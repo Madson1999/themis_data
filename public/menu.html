@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="/css/styles.css">
+  <title>Themis Data - menu</title>
+
+  <style>
+    .main-content {
+      padding: 2rem;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .menu-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.5rem;
+      margin-top: 2rem;
+    }
+
+    .menu-card {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      padding: 2rem;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      transition: transform 0.3s, box-shadow 0.3s;
+      cursor: pointer;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .menu-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+    }
+
+    .menu-card h3 {
+      color: #333;
+      margin-bottom: 1rem;
+      font-size: 1.3rem;
+    }
+
+    .menu-card p {
+      color: #666;
+      margin-bottom: 1.5rem;
+      line-height: 1.6;
+    }
+
+    .menu-card .icon {
+      font-size: 2.5rem;
+      margin-bottom: 1rem;
+      color: #667eea;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .stat-card {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 8px;
+      padding: 1.5rem;
+      text-align: center;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    }
+
+    .stat-number {
+      font-size: 2rem;
+      font-weight: bold;
+      color: #667eea;
+      margin-bottom: 0.5rem;
+    }
+
+    .stat-label {
+      color: #666;
+      font-size: 0.9rem;
+    }
+
+    @media (max-width: 768px) {
+      .header {
+        padding: 1rem;
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      .main-content {
+        padding: 1rem;
+      }
+
+      .menu-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+
+</head>
+
+<body>
+  <header class="header">
+    <div class="logo-header" onclick="window.location.href='/menu'" style="cursor:pointer;">
+      <img src="images/logo.png" alt="Themis Data Logo">
+      <h1>Themis Data</h1>
+    </div>
+    <div class="user-info">
+      <div class="user-avatar">
+        <img id="userAvatar" alt="Avatar do usuário"
+          onerror="this.style.display='none'; document.querySelector('.fallback').style.display='flex';">
+        <div class="fallback" id="userAvatarFallback">?</div>
+      </div>
+      <div style="display: flex; flex-direction: column; align-items: flex-start;">
+        <span id="userNome"></span>
+        <span id="userNivelAcesso" style="font-size:0.95em; color:#667eea; font-weight:500;"></span>
+      </div>
+      <button class="menu-toggle" onclick="toggleMenu()">
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+      </button>
+      <div class="dropdown-menu" id="dropdownMenu">
+        <a href="#" onclick="editarPerfil()">📝 Editar Perfil</a>
+        <a href="#" onclick="alterarSenha()">🔒 Alterar Senha</a>
+        <a href="#" onclick="configuracoes()">⚙️ Configurações</a>
+        <a href="#" onclick="ajuda()">❓ Ajuda</a>
+        <a href="/" class="logout-option">🚪 Sair</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-content">
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-number">1,234</div>
+        <div class="stat-label">Registros Totais</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">89</div>
+        <div class="stat-label">Novos Hoje</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">12</div>
+        <div class="stat-label">Relatórios</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">5</div>
+        <div class="stat-label">Usuários Ativos</div>
+      </div>
+    </div>
+
+    <div class="menu-grid">
+      <div class="menu-card" id="clientes">
+        <div class="icon">👤</div>
+        <h3>Cadastro de Clientes</h3>
+        <p>Cadastre novos clientes, gerencie informações pessoais, endereços e dados de contato. Mantenha um registro
+          completo de todos os clientes.</p>
+      </div>
+
+      <div class="menu-card" id="contratos">
+        <div class="icon">📄</div>
+        <h3>Contratos</h3>
+        <p>Gere contratos personalizados automaticamente. Use modelos predefinidos, preencha dados do cliente e baixe
+          documentos prontos.</p>
+      </div>
+
+      <div class="menu-card" onclick="navegarPara('dados')">
+        <div class="icon">📊</div>
+        <h3>Gerenciar Dados</h3>
+        <p>Visualize, edite e gerencie todos os registros do sistema. Adicione novos dados, atualize informações
+          existentes e organize suas informações.</p>
+      </div>
+
+      <div class="menu-card" onclick="navegarPara('relatorios')">
+        <div class="icon">📈</div>
+        <h3>Relatórios</h3>
+        <p>Gere relatórios detalhados e análises estatísticas. Exporte dados em diferentes formatos e visualize
+          tendências importantes.</p>
+      </div>
+
+      <div class="menu-card" id="usuarios">
+        <div class="icon">👥</div>
+        <h3>Usuários</h3>
+        <p>Gerencie usuários do sistema. Adicione novos usuários, configure permissões e monitore atividades de acesso.
+        </p>
+      </div>
+
+      <div class="menu-card" onclick="navegarPara('configuracoes')">
+        <div class="icon">⚙️</div>
+        <h3>Configurações</h3>
+        <p>Configure preferências do sistema, ajuste parâmetros de segurança e personalize a interface conforme suas
+          necessidades.</p>
+      </div>
+
+      <div class="menu-card" onclick="navegarPara('backup')">
+        <div class="icon">💾</div>
+        <h3>Backup & Restauração</h3>
+        <p>Faça backup dos seus dados, configure backups automáticos e restaure informações quando necessário.</p>
+      </div>
+
+      <div class="menu-card" onclick="navegarPara('ajuda')">
+        <div class="icon">❓</div>
+        <h3>Ajuda & Suporte</h3>
+        <p>Acesse documentação, tutoriais e entre em contato com o suporte técnico para obter ajuda.</p>
+      </div>
+    </div>
+  </main>
+
+
+  <!-- No HTML - carregar script -->
+  <script src="js/script.js"></script>
+
+  <script>
+
+    document.getElementById('clientes').addEventListener('click', () => {
+      window.location.href = '/clientes';
+    });
+
+    document.getElementById('contratos').addEventListener('click', () => {
+      window.location.href = '/contratos';
+    });
+
+    document.getElementById('usuarios').addEventListener('click', () => {
+      window.location.href = '/usuarios';
+    });
+
+
+
+  </script>
+</body>
+
+</html>

@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login</title>
+
+  <!-- Incluir estilos compartilhados -->
+  <link rel="stylesheet" href="css/styles.css">
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url('images/background.png');
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+
+    .login-container {
+      background: rgba(255, 255, 255, 0.95);
+      padding: 2.5rem;
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(10px);
+      min-width: 350px;
+    }
+
+    input {
+      display: block;
+      width: 100%;
+      margin-bottom: 1rem;
+      padding: 0.8rem;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 1rem;
+      box-sizing: border-box;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: #007bff;
+      box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+    }
+
+    button {
+      width: 100%;
+      padding: 0.8rem;
+      background: #007bff;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 1rem;
+      font-weight: bold;
+      transition: background-color 0.3s;
+    }
+
+    button:hover {
+      background: #0056b3;
+    }
+
+    .mensagem {
+      color: red;
+      margin-bottom: 1rem;
+      text-align: center;
+      font-size: 0.9rem;
+    }
+
+    .mensagem.sucesso {
+      color: #28a745;
+    }
+
+    .logo-container {
+      text-align: center;
+      margin-bottom: 1.5rem;
+    }
+
+    .logo {
+      max-width: 400px;
+      height: auto;
+      display: block;
+      margin: 0 auto;
+      margin-top: -20px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="login-container">
+    <div class="logo-container">
+      <img src="images/logo.png" alt="Themis Data Logo" class="logo">
+    </div>
+    <form id="loginForm">
+      <input type="email" id="email" placeholder="E-mail" required />
+      <input type="password" id="senha" placeholder="Senha" required />
+      <div class="mensagem" id="mensagem"></div>
+      <button type="submit">Entrar</button>
+    </form>
+  </div>
+  <script>
+    document.getElementById('loginForm').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      const email = document.getElementById('email').value;
+      const senha = document.getElementById('senha').value;
+      const mensagem = document.getElementById('mensagem');
+      mensagem.textContent = '';
+      mensagem.className = 'mensagem';
+
+      try {
+        const resposta = await fetch('/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, senha }),
+          credentials: 'include' // <- ESSENCIAL!
+        });
+        const dados = await resposta.json();
+        if (dados.sucesso) {
+          mensagem.className = 'mensagem sucesso';
+          mensagem.textContent = dados.mensagem;
+          setTimeout(() => {
+            window.location.href = dados.redirect || '/menu';
+          }, 1000);
+        } else {
+          mensagem.textContent = dados.mensagem;
+        }
+      } catch (err) {
+        mensagem.textContent = 'Erro ao conectar ao servidor.';
+      }
+    });
+  </script>
+</body>
+
+</html>
