@@ -174,23 +174,23 @@ body {
   border-bottom: 1px solid #f0f0f0;
 }
 
-/* 4.2 Retira a linha abaixo do ultimo item */
+/* 4.4 Retira a linha abaixo do ultimo item */
 .dropdown-menu a:last-child {
   border-bottom: none;
 }
 
-/* 4.3 Quando o mouse passar por cima dos itens */
+/* 4.5 Quando o mouse passar por cima dos itens */
 .dropdown-menu a:hover {
   background: #f8f9fa;
 }
 
-/* 4.4 Classe especial para o item de deslogar */
+/* 4.6 Classe especial para o item de deslogar */
 .dropdown-menu .logout-option {
   color: #dc3545;
   font-weight: 500;
 }
 
-/* 4.5 Classe especial para o item de deslogar */
+/* 4.7 Classe especial para o item de deslogar */
 .dropdown-menu .logout-option:hover {
   background: #dc3545;
   color: white;

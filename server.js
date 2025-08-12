@@ -3,6 +3,7 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const path = require('path');
 const fs = require('fs-extra');
+const multer = require('multer');
 require('dotenv').config();
 const cookieParser = require('cookie-parser');
 
@@ -14,6 +15,8 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
+// Configuração do multer para upload de arquivos
+const upload = multer({ dest: 'temp/' });
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -52,6 +55,11 @@ app.get('/clientes', (req, res) => {
 // Rota para a página de contratos
 app.get('/contratos', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'contratos.html'));
+});
+
+// Rota para a página de Ações
+app.get('/acoes', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'acoes.html'));
 });
 
 // Rota para a página de usuarios
@@ -447,6 +455,437 @@ app.get('/api/usuarios', async (req, res) => {
   } catch (error) {
     console.error('Erro ao buscar usuários:', error);
     res.status(500).json({ erro: 'Erro ao buscar usuários' });
+  }
+});
+
+// API para listar designados (estagiário ou adv, ativos)
+app.get('/api/designados', async (req, res) => {
+  try {
+    const designados = await executeQuery(
+      "SELECT id, nome, nivel_acesso FROM usuarios WHERE (nivel_acesso = 'estagiario' OR nivel_acesso = 'adv') AND ativo = 1 ORDER BY nome"
+    );
+    res.json(designados);
+  } catch (error) {
+    console.error('Erro ao buscar designados:', error);
+    res.status(500).json({ erro: 'Erro ao buscar designados' });
+  }
+});
+
+// API para criar ações
+app.post('/api/acoes', upload.fields([
+  { name: 'contratoArquivo' },
+  { name: 'documentacaoArquivo' },
+  { name: 'provasArquivo' }
+]), async (req, res) => {
+  try {
+    const { cliente_id, designado_id, titulo, status } = req.body;
+    const arquivos = req.files || [];
+    const criador_id = req.cookies?.usuario_id;
+
+    if (!cliente_id || !titulo || !status) {
+      return res.status(400).json({ sucesso: false, mensagem: 'Dados obrigatórios não fornecidos' });
+    }
+
+    // Buscar dados do cliente
+    const clientes = await executeQuery('SELECT nome, cpf_cnpj FROM cliente WHERE id = ?', [cliente_id]);
+    if (clientes.length === 0) {
+      return res.status(404).json({ sucesso: false, mensagem: 'Cliente não encontrado' });
+    }
+    const cliente = clientes[0];
+
+    // Buscar dados do designado (se não for "nenhum")
+    let designadoNome = null;
+    if (designado_id && designado_id !== 'Nenhum') {
+      const designados = await executeQuery('SELECT nome FROM usuarios WHERE id = ?', [designado_id]);
+      if (designados.length > 0) {
+        designadoNome = designados[0].nome;
+      }
+    }
+
+    // Buscar dados do criador
+    const criadores = await executeQuery('SELECT nome FROM usuarios WHERE id = ?', [criador_id]);
+    const criadorNome = criadores.length > 0 ? criadores[0].nome : 'Sistema';
+
+    // Criar estrutura de pastas
+    const letraInicial = cliente.nome.charAt(0).toUpperCase();
+    const nomeClienteFormatado = `${cliente.nome} ${cliente.cpf_cnpj}`.replace(/[^a-zA-Z0-9\s]/g, '');
+    const tituloFormatado = titulo.replace(/[^a-zA-Z0-9\s]/g, '');
+
+    const pastaRaiz = path.join(__dirname, 'public', 'uploads', 'PROCESSOS');
+    const pastaLetra = path.join(pastaRaiz, letraInicial);
+    const pastaCliente = path.join(pastaLetra, nomeClienteFormatado);
+    const pastaAcao = path.join(pastaCliente, tituloFormatado);
+
+    // Criar pastas se não existirem
+    await fs.ensureDir(pastaAcao);
+
+    // Juntar todos os arquivos dos campos
+    const arquivosUpload = [
+      ...(req.files['contratoArquivo'] || []),
+      ...(req.files['documentacaoArquivo'] || []),
+      ...(req.files['provasArquivo'] || [])
+    ];
+    for (const arquivo of arquivosUpload) {
+      let prefixo = '';
+      if (arquivo.fieldname === 'contratoArquivo') {
+        prefixo = 'CON - ';
+      } else if (arquivo.fieldname === 'documentacaoArquivo') {
+        prefixo = 'DOC - ';
+      } else if (arquivo.fieldname === 'provasArquivo') {
+        prefixo = 'PROV - ';
+      }
+      const nomeArquivoComPrefixo = prefixo + arquivo.originalname;
+      const caminhoDestino = path.join(pastaAcao, nomeArquivoComPrefixo);
+      await fs.move(arquivo.path, caminhoDestino);
+    }
+
+    // Salvar no banco de dados apenas o caminho da pasta
+    const result = await executeQuery(
+      'INSERT INTO acoes (cliente, titulo, designado, criador, status, arquivo_path, data_criacao) VALUES (?, ?, ?, ?, ?, ?, NOW())',
+      [
+        cliente.nome,
+        titulo,
+        designadoNome,
+        criadorNome,
+        status,
+        pastaAcao
+      ]
+    );
+
+    res.json({
+      sucesso: true,
+      mensagem: 'Ação criada com sucesso!',
+      id: result.insertId,
+      arquivos: arquivos
+    });
+
+  } catch (error) {
+    console.error('Erro ao criar ação:', error);
+    res.status(500).json({ sucesso: false, mensagem: 'Erro interno do servidor' });
+  }
+});
+
+// Upload de arquivo do tipo 'Ação' para uma ação existente
+app.post('/api/acoes/upload-acao', upload.single('arquivo'), async (req, res) => {
+  try {
+    const { acao_id } = req.body;
+    const arquivo = req.file;
+    if (!acao_id || !arquivo) {
+      return res.status(400).json({ sucesso: false, mensagem: 'Dados obrigatórios não fornecidos' });
+    }
+    // Buscar ação
+    const acoes = await executeQuery('SELECT * FROM acoes WHERE id = ?', [acao_id]);
+    if (acoes.length === 0) {
+      return res.status(404).json({ sucesso: false, mensagem: 'Ação não encontrada' });
+    }
+    const acao = acoes[0];
+    // Buscar cliente para montar pasta
+    const clienteNome = acao.cliente;
+    // Buscar cliente para pegar CPF/CNPJ
+    let clienteCpf = '';
+    const clientes = await executeQuery('SELECT cpf_cnpj FROM cliente WHERE nome = ?', [clienteNome]);
+    if (clientes.length > 0) clienteCpf = clientes[0].cpf_cnpj;
+    const letraInicial = clienteNome.charAt(0).toUpperCase();
+    const nomeClienteFormatado = `${clienteNome} ${clienteCpf}`.replace(/[^a-zA-Z0-9\s]/g, '');
+    const tituloFormatado = acao.titulo.replace(/[^a-zA-Z0-9\s]/g, '');
+    const pastaRaiz = path.join(__dirname, 'public', 'uploads', 'PROCESSOS');
+    const pastaLetra = path.join(pastaRaiz, letraInicial);
+    const pastaCliente = path.join(pastaLetra, nomeClienteFormatado);
+    const pastaAcao = path.join(pastaCliente, tituloFormatado);
+    await fs.ensureDir(pastaAcao);
+    // Salvar arquivo com prefixo, garantindo nome único
+    let nomeArquivoComPrefixo = 'ACAO - ' + arquivo.originalname;
+    let caminhoDestino = path.join(pastaAcao, nomeArquivoComPrefixo);
+    let contador = 1;
+    const ext = path.extname(arquivo.originalname);
+    const base = path.basename(arquivo.originalname, ext);
+    while (await fs.pathExists(caminhoDestino)) {
+      nomeArquivoComPrefixo = `ACAO - ${base} (${contador})${ext}`;
+      caminhoDestino = path.join(pastaAcao, nomeArquivoComPrefixo);
+      contador++;
+    }
+    await fs.move(arquivo.path, caminhoDestino);
+    // Atualizar campo arquivo_path no banco (mantém só o caminho da pasta)
+    await executeQuery('UPDATE acoes SET arquivo_path = ? WHERE id = ?', [pastaAcao, acao_id]);
+    res.json({ sucesso: true, mensagem: 'Arquivo salvo com sucesso!' });
+  } catch (error) {
+    console.error('Erro ao salvar arquivo de ação:', error);
+    res.status(500).json({ sucesso: false, mensagem: 'Erro ao salvar arquivo' });
+  }
+});
+
+// Upload de arquivo do tipo 'Contrato' para uma ação existente
+app.post('/api/acoes/upload-contrato', upload.single('arquivo'), async (req, res) => {
+  try {
+    const { acao_id } = req.body;
+    const arquivo = req.file;
+    if (!acao_id || !arquivo) {
+      return res.status(400).json({ sucesso: false, mensagem: 'Dados obrigatórios não fornecidos' });
+    }
+    const acoes = await executeQuery('SELECT * FROM acoes WHERE id = ?', [acao_id]);
+    if (acoes.length === 0) {
+      return res.status(404).json({ sucesso: false, mensagem: 'Ação não encontrada' });
+    }
+    const acao = acoes[0];
+    const clienteNome = acao.cliente;
+    let clienteCpf = '';
+    const clientes = await executeQuery('SELECT cpf_cnpj FROM cliente WHERE nome = ?', [clienteNome]);
+    if (clientes.length > 0) clienteCpf = clientes[0].cpf_cnpj;
+    const letraInicial = clienteNome.charAt(0).toUpperCase();
+    const nomeClienteFormatado = `${clienteNome} ${clienteCpf}`.replace(/[^a-zA-Z0-9\s]/g, '');
+    const tituloFormatado = acao.titulo.replace(/[^a-zA-Z0-9\s]/g, '');
+    const pastaRaiz = path.join(__dirname, 'public', 'uploads', 'PROCESSOS');
+    const pastaLetra = path.join(pastaRaiz, letraInicial);
+    const pastaCliente = path.join(pastaLetra, nomeClienteFormatado);
+    const pastaAcao = path.join(pastaCliente, tituloFormatado);
+    await fs.ensureDir(pastaAcao);
+    // Salvar arquivo com prefixo, garantindo nome único
+    let nomeArquivoComPrefixo = 'CON - ' + arquivo.originalname;
+    let caminhoDestino = path.join(pastaAcao, nomeArquivoComPrefixo);
+    let contador = 1;
+    const ext = path.extname(arquivo.originalname);
+    const base = path.basename(arquivo.originalname, ext);
+    while (await fs.pathExists(caminhoDestino)) {
+      nomeArquivoComPrefixo = `CON - ${base} (${contador})${ext}`;
+      caminhoDestino = path.join(pastaAcao, nomeArquivoComPrefixo);
+      contador++;
+    }
+    await fs.move(arquivo.path, caminhoDestino);
+    await executeQuery('UPDATE acoes SET arquivo_path = ? WHERE id = ?', [pastaAcao, acao_id]);
+    res.json({ sucesso: true, mensagem: 'Arquivo salvo com sucesso!' });
+  } catch (error) {
+    res.status(500).json({ sucesso: false, mensagem: 'Erro ao salvar arquivo' });
+  }
+});
+
+// Upload de arquivo do tipo 'Documentação' para uma ação existente
+app.post('/api/acoes/upload-documentacao', upload.single('arquivo'), async (req, res) => {
+  try {
+    const { acao_id } = req.body;
+    const arquivo = req.file;
+    if (!acao_id || !arquivo) {
+      return res.status(400).json({ sucesso: false, mensagem: 'Dados obrigatórios não fornecidos' });
+    }
+    const acoes = await executeQuery('SELECT * FROM acoes WHERE id = ?', [acao_id]);
+    if (acoes.length === 0) {
+      return res.status(404).json({ sucesso: false, mensagem: 'Ação não encontrada' });
+    }
+    const acao = acoes[0];
+    const clienteNome = acao.cliente;
+    let clienteCpf = '';
+    const clientes = await executeQuery('SELECT cpf_cnpj FROM cliente WHERE nome = ?', [clienteNome]);
+    if (clientes.length > 0) clienteCpf = clientes[0].cpf_cnpj;
+    const letraInicial = clienteNome.charAt(0).toUpperCase();
+    const nomeClienteFormatado = `${clienteNome} ${clienteCpf}`.replace(/[^a-zA-Z0-9\s]/g, '');
+    const tituloFormatado = acao.titulo.replace(/[^a-zA-Z0-9\s]/g, '');
+    const pastaRaiz = path.join(__dirname, 'public', 'uploads', 'PROCESSOS');
+    const pastaLetra = path.join(pastaRaiz, letraInicial);
+    const pastaCliente = path.join(pastaLetra, nomeClienteFormatado);
+    const pastaAcao = path.join(pastaCliente, tituloFormatado);
+    await fs.ensureDir(pastaAcao);
+    // Salvar arquivo com prefixo, garantindo nome único
+    let nomeArquivoComPrefixo = 'DOC - ' + arquivo.originalname;
+    let caminhoDestino = path.join(pastaAcao, nomeArquivoComPrefixo);
+    let contador = 1;
+    const ext = path.extname(arquivo.originalname);
+    const base = path.basename(arquivo.originalname, ext);
+    while (await fs.pathExists(caminhoDestino)) {
+      nomeArquivoComPrefixo = `DOC - ${base} (${contador})${ext}`;
+      caminhoDestino = path.join(pastaAcao, nomeArquivoComPrefixo);
+      contador++;
+    }
+    await fs.move(arquivo.path, caminhoDestino);
+    await executeQuery('UPDATE acoes SET arquivo_path = ? WHERE id = ?', [pastaAcao, acao_id]);
+    res.json({ sucesso: true, mensagem: 'Arquivo salvo com sucesso!' });
+  } catch (error) {
+    res.status(500).json({ sucesso: false, mensagem: 'Erro ao salvar arquivo' });
+  }
+});
+
+// Upload de arquivo do tipo 'Provas' para uma ação existente
+app.post('/api/acoes/upload-provas', upload.single('arquivo'), async (req, res) => {
+  try {
+    const { acao_id } = req.body;
+    const arquivo = req.file;
+    if (!acao_id || !arquivo) {
+      return res.status(400).json({ sucesso: false, mensagem: 'Dados obrigatórios não fornecidos' });
+    }
+    const acoes = await executeQuery('SELECT * FROM acoes WHERE id = ?', [acao_id]);
+    if (acoes.length === 0) {
+      return res.status(404).json({ sucesso: false, mensagem: 'Ação não encontrada' });
+    }
+    const acao = acoes[0];
+    const clienteNome = acao.cliente;
+    let clienteCpf = '';
+    const clientes = await executeQuery('SELECT cpf_cnpj FROM cliente WHERE nome = ?', [clienteNome]);
+    if (clientes.length > 0) clienteCpf = clientes[0].cpf_cnpj;
+    const letraInicial = clienteNome.charAt(0).toUpperCase();
+    const nomeClienteFormatado = `${clienteNome} ${clienteCpf}`.replace(/[^a-zA-Z0-9\s]/g, '');
+    const tituloFormatado = acao.titulo.replace(/[^a-zA-Z0-9\s]/g, '');
+    const pastaRaiz = path.join(__dirname, 'public', 'uploads', 'PROCESSOS');
+    const pastaLetra = path.join(pastaRaiz, letraInicial);
+    const pastaCliente = path.join(pastaLetra, nomeClienteFormatado);
+    const pastaAcao = path.join(pastaCliente, tituloFormatado);
+    await fs.ensureDir(pastaAcao);
+    // Salvar arquivo com prefixo, garantindo nome único
+    let nomeArquivoComPrefixo = 'PROV - ' + arquivo.originalname;
+    let caminhoDestino = path.join(pastaAcao, nomeArquivoComPrefixo);
+    let contador = 1;
+    const ext = path.extname(arquivo.originalname);
+    const base = path.basename(arquivo.originalname, ext);
+    while (await fs.pathExists(caminhoDestino)) {
+      nomeArquivoComPrefixo = `PROV - ${base} (${contador})${ext}`;
+      caminhoDestino = path.join(pastaAcao, nomeArquivoComPrefixo);
+      contador++;
+    }
+    await fs.move(arquivo.path, caminhoDestino);
+    await executeQuery('UPDATE acoes SET arquivo_path = ? WHERE id = ?', [pastaAcao, acao_id]);
+    res.json({ sucesso: true, mensagem: 'Arquivo salvo com sucesso!' });
+  } catch (error) {
+    res.status(500).json({ sucesso: false, mensagem: 'Erro ao salvar arquivo' });
+  }
+});
+
+// Rota para remover arquivo de uma ação
+app.post('/api/acoes/remover-arquivo', async (req, res) => {
+  try {
+    const { acaoId, nomeArquivo } = req.body;
+    if (!acaoId || !nomeArquivo) return res.status(400).json({ erro: 'Dados obrigatórios não fornecidos' });
+    const acoes = await executeQuery('SELECT arquivo_path FROM acoes WHERE id = ?', [acaoId]);
+    if (acoes.length === 0) return res.status(404).json({ erro: 'Ação não encontrada' });
+    const pasta = acoes[0].arquivo_path;
+    const caminho = path.join(pasta, nomeArquivo);
+    if (await fs.pathExists(caminho)) {
+      await fs.remove(caminho);
+      return res.json({ sucesso: true });
+    } else {
+      return res.status(404).json({ erro: 'Arquivo não encontrado' });
+    }
+  } catch (error) {
+    res.status(500).json({ erro: 'Erro ao remover arquivo' });
+  }
+});
+
+// API para listar ações (para o kanban, com filtro opcional por status)
+app.get('/api/acoes', async (req, res) => {
+  try {
+    const status = req.query.status;
+    let sql = `SELECT id, cliente, titulo, designado, criador, status, data_criacao, arquivo_path, data_aprovado FROM acoes`;
+    const params = [];
+    if (status) {
+      sql += ' WHERE status = ?';
+      params.push(status);
+    }
+    sql += ' ORDER BY data_criacao DESC';
+    const acoes = await executeQuery(sql, params);
+    // Organizar ações por designado
+    const acoesPorDesignado = {};
+    acoes.forEach(acao => {
+      const designado = acao.designado || 'Nenhum';
+      if (!acoesPorDesignado[designado]) {
+        acoesPorDesignado[designado] = [];
+      }
+      acoesPorDesignado[designado].push(acao);
+    });
+    res.json(acoesPorDesignado);
+  } catch (error) {
+    console.error('Erro ao buscar ações:', error);
+    res.status(500).json({ erro: 'Erro ao buscar ações' });
+  }
+});
+
+// Aprovar ação (salva data_aprovado)
+app.post('/api/acoes/aprovar/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await executeQuery('UPDATE acoes SET data_aprovado = NOW() WHERE id = ?', [id]);
+    res.json({ sucesso: true });
+  } catch (error) {
+    res.status(500).json({ erro: 'Erro ao aprovar ação' });
+  }
+});
+
+// Rota para buscar status da ação
+app.get('/api/acoes/status/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const acoes = await executeQuery('SELECT status FROM acoes WHERE id = ?', [id]);
+    if (acoes.length === 0) return res.status(404).json({ erro: 'Ação não encontrada' });
+    res.json({ status: acoes[0].status });
+  } catch (error) {
+    res.status(500).json({ erro: 'Erro ao buscar status' });
+  }
+});
+
+// Rota para atualizar status e designado da ação
+app.put('/api/acoes/status/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, designado } = req.body;
+    if (status === 'finalizado') {
+      await executeQuery('UPDATE acoes SET status = ?, designado = ?, data_concluido = NOW() WHERE id = ?', [status, designado, id]);
+    } else if (status === 'em andamento') {
+      await executeQuery('UPDATE acoes SET status = ?, designado = ?, data_concluido = NULL WHERE id = ?', [status, designado, id]);
+    } else {
+      await executeQuery('UPDATE acoes SET status = ?, designado = ? WHERE id = ?', [status, designado, id]);
+    }
+    res.json({ sucesso: true });
+  } catch (error) {
+    res.status(500).json({ erro: 'Erro ao atualizar status/designado' });
+  }
+});
+
+// Rota para listar arquivos da ação por tipo
+app.get('/api/acoes/arquivos/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const acoes = await executeQuery('SELECT arquivo_path, designado FROM acoes WHERE id = ?', [id]);
+    if (acoes.length === 0) return res.status(404).json({ erro: 'Ação não encontrada' });
+    const pasta = acoes[0].arquivo_path;
+    const designadoAtual = acoes[0].designado || 'Nenhum';
+    if (!pasta || !(await fs.pathExists(pasta))) return res.json({ Contrato: [], Documentacao: [], Provas: [], Acao: [], __designadoAtual: designadoAtual });
+    const arquivos = await fs.readdir(pasta);
+    const lista = arquivos.map(nome => ({ nome, path: path.join(pasta, nome) }));
+    // Separar por prefixo
+    const tipos = {
+      Contrato: lista.filter(a => a.nome.startsWith('CON - ')),
+      Documentacao: lista.filter(a => a.nome.startsWith('DOC - ')),
+      Provas: lista.filter(a => a.nome.startsWith('PROV - ')),
+      Acao: lista.filter(a => a.nome.startsWith('ACAO - ')),
+      __designadoAtual: designadoAtual
+    };
+    res.json(tipos);
+  } catch (error) {
+    console.error('Erro ao listar arquivos da ação:', error);
+    res.status(500).json({ erro: 'Erro ao listar arquivos' });
+  }
+});
+
+// Rota para salvar comentário de devolução da ação (agora atualiza a coluna comentario na tabela acoes)
+app.post('/api/acoes/comentario/:acaoId', async (req, res) => {
+  const { acaoId } = req.params;
+  const { comentario } = req.body;
+  if (!comentario || !acaoId) {
+    return res.status(400).json({ mensagem: 'Comentário ou ação inválidos.' });
+  }
+  try {
+    await executeQuery('UPDATE acoes SET comentario = ? WHERE id = ?', [comentario, acaoId]);
+    res.json({ mensagem: 'Comentário salvo com sucesso!' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ mensagem: 'Erro ao salvar comentário.' });
+  }
+});
+
+// Rota para buscar o comentário da ação
+app.get('/api/acoes/comentario/:acaoId', async (req, res) => {
+  const { acaoId } = req.params;
+  try {
+    const result = await executeQuery('SELECT comentario FROM acoes WHERE id = ?', [acaoId]);
+    if (result.length === 0) return res.json({ comentario: '' });
+    res.json({ comentario: result[0].comentario || '' });
+  } catch (e) {
+    res.status(500).json({ comentario: '' });
   }
 });
 

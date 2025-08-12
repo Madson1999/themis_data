@@ -123,6 +123,24 @@ async function initializeDatabase() {
       )
     `;
 
+    //Tabela de Designar Ações
+    const createAcoes = `
+    CREATE TABLE IF NOT EXISTS acoes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    protocolo BOOLEAN,
+    cliente_id INT,
+    titulo VARCHAR(60),
+    designado_id INT,
+    criador_id INT,
+    status VARCHAR(20),
+    data_concluido TIME,
+    data_aprovado TIME,
+    arquivo_path VARCHAR(500),
+    data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    `;
+
+    await executeQuery(createAcoes);
     await executeQuery(createUsersTable);
     await executeQuery(createLogsTable);
     await executeQuery(createConfigTable);

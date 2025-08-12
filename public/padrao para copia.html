@@ -133,104 +133,12 @@
     </div>
   </header>
 
-  <main class="main-content">
-    <div class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-number">1,234</div>
-        <div class="stat-label">Registros Totais</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-number">89</div>
-        <div class="stat-label">Novos Hoje</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-number">12</div>
-        <div class="stat-label">Relatórios</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-number">5</div>
-        <div class="stat-label">Usuários Ativos</div>
-      </div>
-    </div>
-
-    <div class="menu-grid">
-      <div class="menu-card" id="clientes">
-        <div class="icon">👤</div>
-        <h3>Cadastro de Clientes</h3>
-        <p>Cadastre novos clientes, gerencie informações pessoais, endereços e dados de contato. Mantenha um registro
-          completo de todos os clientes.</p>
-      </div>
-
-      <div class="menu-card" id="contratos">
-        <div class="icon">📄</div>
-        <h3>Contratos</h3>
-        <p>Visualize, gere e faça download de contratos dos clientes. Utilize modelos prontos, acompanhe o histórico e
-          organize todos os documentos em um só lugar.</p>
-      </div>
-
-      <div class="menu-card" id="acoes">
-        <div class="icon">📊</div>
-        <h3>Designar Ações</h3>
-        <p>Crie, acompanhe, corrija e gerencie ações para cada cliente. Anexe documentos, defina responsáveis, controle
-          o andamento e aprove ações de forma centralizada.</p>
-      </div>
-
-      <div class="menu-card" onclick="navegarPara('relatorios')">
-        <div class="icon">📈</div>
-        <h3>Relatórios</h3>
-        <p>Gere relatórios detalhados e análises estatísticas. Exporte dados em diferentes formatos e visualize
-          tendências importantes.</p>
-      </div>
-
-      <div class="menu-card" id="usuarios">
-        <div class="icon">👥</div>
-        <h3>Usuários</h3>
-        <p>Gerencie usuários do sistema. Adicione novos usuários, configure permissões e monitore atividades de acesso.
-        </p>
-      </div>
-
-      <div class="menu-card" onclick="navegarPara('configuracoes')">
-        <div class="icon">⚙️</div>
-        <h3>Configurações</h3>
-        <p>Configure preferências do sistema, ajuste parâmetros de segurança e personalize a interface conforme suas
-          necessidades.</p>
-      </div>
-
-      <div class="menu-card" onclick="navegarPara('backup')">
-        <div class="icon">💾</div>
-        <h3>Backup & Restauração</h3>
-        <p>Faça backup dos seus dados, configure backups automáticos e restaure informações quando necessário.</p>
-      </div>
-
-      <div class="menu-card" onclick="navegarPara('ajuda')">
-        <div class="icon">❓</div>
-        <h3>Ajuda & Suporte</h3>
-        <p>Acesse documentação, tutoriais e entre em contato com o suporte técnico para obter ajuda.</p>
-      </div>
-    </div>
-  </main>
 
 
   <!-- No HTML - carregar script -->
   <script src="js/script.js"></script>
 
   <script>
-
-    document.getElementById('clientes').addEventListener('click', () => {
-      window.location.href = '/clientes';
-    });
-
-    document.getElementById('contratos').addEventListener('click', () => {
-      window.location.href = '/contratos';
-    });
-
-    document.getElementById('usuarios').addEventListener('click', () => {
-      window.location.href = '/usuarios';
-    });
-
-    document.getElementById('acoes').addEventListener('click', () => {
-      window.location.href = '/acoes';
-    });
 
 
 
