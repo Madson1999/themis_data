@@ -153,18 +153,6 @@
       margin-bottom: 1.5rem;
     }
 
-    .search-box {
-      display: flex;
-      gap: 1rem;
-      align-items: center;
-    }
-
-    .search-box input {
-      padding: 0.5rem;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      width: 300px;
-    }
 
     table {
       width: 100%;
@@ -209,24 +197,6 @@
       background: #138496;
     }
 
-    .btn-warning {
-      background: #ffc107;
-      color: #212529;
-    }
-
-    .btn-warning:hover {
-      background: #e0a800;
-    }
-
-    .btn-danger {
-      background: #dc3545;
-      color: white;
-    }
-
-    .btn-danger:hover {
-      background: #c82333;
-    }
-
     .modal {
       display: block;
       position: fixed;
@@ -240,7 +210,7 @@
 
     .modal-content {
       background-color: #fefefe;
-      margin: 5% auto;
+      margin: 7% auto;
       padding: 0;
       border: 1px solid #888;
       width: 80%;
@@ -298,9 +268,7 @@
         grid-template-columns: 1fr;
       }
 
-      .search-box input {
-        width: 200px;
-      }
+
     }
   </style>
 </head>
@@ -327,7 +295,7 @@
         <div class="bar"></div>
       </button>
       <div class="dropdown-menu" id="dropdownMenu">
-        <a href="#" onclick="editarPerfil()">📝 Editar Perfil</a>
+        <a href="/usuarios">👥 Editar Usuários</a>
         <a href="#" onclick="alterarSenha()">🔒 Alterar Senha</a>
         <a href="#" onclick="configuracoes()">⚙️ Configurações</a>
         <a href="#" onclick="ajuda()">❓ Ajuda</a>
@@ -491,7 +459,7 @@
                 <span class="close" onclick="this.parentElement.parentElement.parentElement.remove()">&times;</span>
               </div>
               <div class="modal-body">
-                <div style="white-space: pre-wrap; font-family: 'Times New Roman', serif; line-height: 1.6; padding: 20px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 5px; max-height: 500px; overflow-y: auto;">
+                <div style="white-space: pre-wrap; font-family: 'Times New Roman', serif; line-height: 1.6; padding: 20px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 5px; max-height: 400px; overflow-y: auto;">
                   ${resultado.preview}
                 </div>
               </div>

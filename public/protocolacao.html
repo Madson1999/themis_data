@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="/css/styles.css">
+  <title>Themis Data - Protocolação</title>
+
+  <style>
+    /* Título */
+    .tabela>h1 {
+      text-align: center;
+      margin-bottom: 20px;
+      color: #2c3e50;
+      font-size: 28px;
+    }
+
+    /* Container da tabela */
+    table {
+      width: 90%;
+      margin: auto;
+      border-collapse: collapse;
+      background: white;
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.05);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    /* Cabeçalho da tabela */
+    thead {
+      background-color: #007bff;
+      color: white;
+    }
+
+    thead th {
+      padding: 12px;
+      text-align: left;
+      font-size: 14px;
+    }
+
+    /* Linhas da tabela */
+    tbody td {
+      padding: 10px;
+      border-bottom: 1px solid #eee;
+      font-size: 14px;
+    }
+
+    /* Efeito zebra */
+    tbody tr:nth-child(even) {
+      background-color: #f8f9fa;
+    }
+
+    /* Hover */
+    tbody tr:hover {
+      background-color: #e9f2ff;
+    }
+
+    /* Texto centralizado para mensagens */
+    tbody td[colspan] {
+      text-align: center;
+      font-style: italic;
+      color: #888;
+    }
+
+    /* Responsivo para celular */
+    @media (max-width: 768px) {
+
+      table,
+      thead,
+      tbody,
+      th,
+      td,
+      tr {
+        display: block;
+      }
+
+      thead {
+        display: none;
+      }
+
+      tbody tr {
+        margin-bottom: 15px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        background: white;
+        padding: 10px;
+      }
+
+      tbody td {
+        border: none;
+        padding: 6px 10px;
+        display: flex;
+        justify-content: space-between;
+        font-size: 13px;
+      }
+
+      tbody td::before {
+        content: attr(data-label);
+        font-weight: bold;
+        color: #555;
+      }
+    }
+  </style>
+
+</head>
+
+<body>
+  <header class="header">
+    <div class="logo-header" onclick="window.location.href='/menu'" style="cursor:pointer;">
+      <img src="images/logo.png" alt="Themis Data Logo">
+      <h1>Themis Data</h1>
+    </div>
+    <div class="user-info">
+      <div class="user-avatar">
+        <img id="userAvatar" alt="Avatar do usuário"
+          onerror="this.style.display='none'; document.querySelector('.fallback').style.display='flex';">
+        <div class="fallback" id="userAvatarFallback">?</div>
+      </div>
+      <div style="display: flex; flex-direction: column; align-items: flex-start;">
+        <span id="userNome"></span>
+        <span id="userNivelAcesso" style="font-size:0.95em; color:#667eea; font-weight:500;"></span>
+      </div>
+      <button class="menu-toggle" onclick="toggleMenu()">
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+      </button>
+      <div class="dropdown-menu" id="dropdownMenu">
+        <a href="/usuarios">👥 Editar Usuários</a>
+        <a href="#" onclick="alterarSenha()">🔒 Alterar Senha</a>
+        <a href="#" onclick="configuracoes()">⚙️ Configurações</a>
+        <a href="#" onclick="ajuda()">❓ Ajuda</a>
+        <a href="/" class="logout-option">🚪 Sair</a>
+      </div>
+    </div>
+  </header>
+
+  <div class="tabela">
+    <h1>📂 Protocolação</h1>
+    <table border="1">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Cliente</th>
+          <th>Título</th>
+          <th>Designado</th>
+          <th>Status</th>
+          <th>Data Aprovado</th>
+        </tr>
+      </thead>
+      <tbody id="tabela-protocolacao">
+        <tr>
+          <td colspan="6">Carregando...</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+
+  <!-- No HTML - carregar script -->
+  <script src="js/script.js"></script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      fetch('/api/protocolacao')
+        .then(res => res.json())
+        .then(dados => {
+          const tbody = document.getElementById('tabela-protocolacao');
+          tbody.innerHTML = '';
+
+          if (dados.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6">Nenhum registro encontrado</td></tr>';
+            return;
+          }
+
+          dados.forEach(item => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                    <td>${item.id}</td>
+                    <td>${item.cliente}</td>
+                    <td>${item.titulo}</td>
+                    <td>${item.designado}</td>
+                    <td>${item.status}</td>
+                    <td>${new Date(item.data_aprovado).toLocaleString('pt-BR')}</td>
+                `;
+            tbody.appendChild(tr);
+          });
+        })
+        .catch(err => {
+          console.error('Erro ao carregar dados:', err);
+        });
+    });
+
+  </script>
+</body>
+
+</html>

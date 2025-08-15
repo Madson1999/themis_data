@@ -62,9 +62,42 @@ app.get('/acoes', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'acoes.html'));
 });
 
+// Rota para a página de Protocolação
+app.get('/protocolacao', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'protocolacao.html'));
+});
+
+// Rota para a página de Ações
+app.get('/kanban', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'kanban.html'));
+});
+
 // Rota para a página de usuarios
 app.get('/usuarios', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'usuarios.html'));
+});
+
+// Rota para buscar registros aprovados
+app.get('/api/protocolacao', async (req, res) => {
+  try {
+    const sql = `
+      SELECT id, cliente, titulo, designado, status, data_aprovado
+      FROM acoes
+      WHERE data_aprovado IS NOT NULL
+      ORDER BY data_aprovado DESC
+    `;
+
+    // se seu executeQuery recebe (sql, params):
+    const result = await executeQuery(sql, []);
+
+    // compat: pode vir como rows ou [rows]
+    const rows = Array.isArray(result) && Array.isArray(result[0]) ? result[0] : result;
+
+    res.json(rows);
+  } catch (err) {
+    console.error('Erro ao buscar protocolação:', err);
+    res.status(500).json({ error: 'Erro no servidor ao buscar protocolação' });
+  }
 });
 
 // API de clientes - Listar todos
@@ -877,6 +910,19 @@ app.post('/api/acoes/comentario/:acaoId', async (req, res) => {
   }
 });
 
+// SUBSTITUA seu ensureAuth por este:
+function ensureAuthCookies(req, res, next) {
+  const id = parseInt(req.cookies?.usuario_id, 10);
+  if (!id) return res.status(401).json({ error: 'Não autenticado' });
+  req.user = {
+    id,
+    nome: req.cookies?.usuario_nome || null,
+    email: req.cookies?.usuario_email || null,
+    nivel: req.cookies?.usuario_nivel || null,
+  };
+  next();
+}
+
 // Rota para buscar o comentário da ação
 app.get('/api/acoes/comentario/:acaoId', async (req, res) => {
   const { acaoId } = req.params;
@@ -888,6 +934,60 @@ app.get('/api/acoes/comentario/:acaoId', async (req, res) => {
     res.status(500).json({ comentario: '' });
   }
 });
+
+// GET /api/acoes/mine (usando designado_id)
+app.get('/api/acoes/mine', ensureAuthCookies, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const sql = `
+      SELECT a.id, a.protocolo, a.cliente, a.titulo, a.designado, a.criador, a.status,
+             a.data_concluido, a.data_aprovado, a.comentario, a.arquivo_path, a.data_criacao
+      FROM acoes a
+      JOIN usuarios u
+        ON TRIM(LOWER(a.designado)) = TRIM(LOWER(u.nome))
+      WHERE u.id = ?
+      ORDER BY a.data_criacao DESC
+    `;
+
+    const rows = await executeQuery(sql, [userId]);
+    res.json(rows);
+  } catch (e) {
+    console.error('Erro /api/acoes/mine:', e);
+    res.status(500).json({ error: 'Erro ao buscar ações' });
+  }
+});
+
+// PATCH /api/acoes/:id/status (com designado_id)
+app.patch('/api/acoes/:id/status', ensureAuthCookies, async (req, res) => {
+  try {
+    const acaoId = Number(req.params.id);
+    const { status } = req.body;
+    const userId = req.user.id;
+    if (!acaoId || !status) return res.status(400).json({ error: 'ID e status são obrigatórios' });
+
+    // Confirma posse pelo ID
+    const check = await executeQuery(
+      `
+      SELECT a.id
+      FROM acoes a
+      JOIN usuarios u
+        ON TRIM(LOWER(a.designado)) = TRIM(LOWER(u.nome))
+      WHERE a.id = ? AND u.id = ?
+      `,
+      [acaoId, userId]
+    );
+    if (!check.length) return res.status(404).json({ error: 'Ação não encontrada ou não pertence a você' });
+
+    await executeQuery(`UPDATE acoes SET status = ? WHERE id = ?`, [status, acaoId]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('Erro PATCH status:', e);
+    res.status(500).json({ error: 'Erro ao atualizar status' });
+  }
+});
+
+
 
 // Inicializar banco de dados e iniciar servidor
 async function startServer() {

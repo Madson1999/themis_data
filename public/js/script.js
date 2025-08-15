@@ -64,11 +64,6 @@ function logout() {
   }
 }
 
-function editarPerfil() {
-  alert('Funcionalidade de editar perfil será implementada em breve!');
-  toggleMenu();
-}
-
 function alterarSenha() {
   alert('Funcionalidade de alterar senha será implementada em breve!');
   toggleMenu();

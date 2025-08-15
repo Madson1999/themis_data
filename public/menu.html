@@ -124,7 +124,7 @@
         <div class="bar"></div>
       </button>
       <div class="dropdown-menu" id="dropdownMenu">
-        <a href="#" onclick="editarPerfil()">📝 Editar Perfil</a>
+        <a href="/usuarios">👥 Editar Usuários</a>
         <a href="#" onclick="alterarSenha()">🔒 Alterar Senha</a>
         <a href="#" onclick="configuracoes()">⚙️ Configurações</a>
         <a href="#" onclick="ajuda()">❓ Ajuda</a>
@@ -169,37 +169,31 @@
       </div>
 
       <div class="menu-card" id="acoes">
-        <div class="icon">📊</div>
+        <div class="icon">📜</div>
         <h3>Designar Ações</h3>
         <p>Crie, acompanhe, corrija e gerencie ações para cada cliente. Anexe documentos, defina responsáveis, controle
           o andamento e aprove ações de forma centralizada.</p>
       </div>
 
-      <div class="menu-card" onclick="navegarPara('relatorios')">
-        <div class="icon">📈</div>
-        <h3>Relatórios</h3>
-        <p>Gere relatórios detalhados e análises estatísticas. Exporte dados em diferentes formatos e visualize
-          tendências importantes.</p>
+      <div class="menu-card" id="protocolacao">
+        <div class="icon">⚖️</div>
+        <h3>Protocolação</h3>
+        <p>Realize a protocolação de processos de forma rápida e organizada, registrando informações essenciais para
+          acompanhamento e controle.</p>
       </div>
 
-      <div class="menu-card" id="usuarios">
-        <div class="icon">👥</div>
-        <h3>Usuários</h3>
-        <p>Gerencie usuários do sistema. Adicione novos usuários, configure permissões e monitore atividades de acesso.
-        </p>
+      <div class="menu-card" id="kanban">
+        <div class="icon">👨‍🎓</div>
+        <h3>Kanban Ações</h3>
+        <p>Acompanhe o andamento das ações em um quadro visual, facilitando a organização e o controle das
+          tarefas.</p>
       </div>
 
-      <div class="menu-card" onclick="navegarPara('configuracoes')">
-        <div class="icon">⚙️</div>
-        <h3>Configurações</h3>
-        <p>Configure preferências do sistema, ajuste parâmetros de segurança e personalize a interface conforme suas
-          necessidades.</p>
-      </div>
-
-      <div class="menu-card" onclick="navegarPara('backup')">
-        <div class="icon">💾</div>
-        <h3>Backup & Restauração</h3>
-        <p>Faça backup dos seus dados, configure backups automáticos e restaure informações quando necessário.</p>
+      <div class="menu-card" id="dashboard">
+        <div class="icon">📊</div>
+        <h3>Dashboard</h3>
+        <p>Visualize indicadores e estatísticas em tempo real para acompanhar o desempenho e tomar decisões
+          estratégicas.</p>
       </div>
 
       <div class="menu-card" onclick="navegarPara('ajuda')">
@@ -224,12 +218,16 @@
       window.location.href = '/contratos';
     });
 
-    document.getElementById('usuarios').addEventListener('click', () => {
-      window.location.href = '/usuarios';
-    });
-
     document.getElementById('acoes').addEventListener('click', () => {
       window.location.href = '/acoes';
+    });
+
+    document.getElementById('protocolacao').addEventListener('click', () => {
+      window.location.href = '/protocolacao';
+    });
+
+    document.getElementById('kanban').addEventListener('click', () => {
+      window.location.href = '/kanban';
     });
 
 

@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="/css/styles.css">
+  <title>Themis Data - Kanban</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      background: #f3f4f6;
+      margin: 0;
+      padding: 24px;
+    }
+
+    .kanban-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+
+    .kanban-col {
+      background: #fff;
+      border-radius: 12px;
+      padding: 12px;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, .08);
+    }
+
+    .kanban-col h3 {
+      margin: 0 0 8px;
+      font-size: 16px;
+    }
+
+    .kanban-list {
+      min-height: 320px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .kanban-card {
+      background: #f8fafc;
+      border-radius: 10px;
+      padding: 10px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, .06);
+      cursor: grab;
+    }
+
+    .kanban-card:active {
+      cursor: grabbing;
+    }
+
+    .kanban-col.drag-over {
+      outline: 2px dashed #4f46e5;
+      outline-offset: 4px;
+    }
+
+    .card-title {
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .card-sub {
+      font-size: .9rem;
+      color: #475569;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .card-footer {
+      margin-top: 6px;
+      font-size: .8rem;
+      color: #64748b;
+      display: flex;
+      justify-content: space-between;
+    }
+  </style>
+
+
+</head>
+
+<body>
+  <header class="header">
+    <div class="logo-header" onclick="window.location.href='/menu'" style="cursor:pointer;">
+      <img src="images/logo.png" alt="Themis Data Logo">
+      <h1>Themis Data</h1>
+    </div>
+    <div class="user-info">
+      <div class="user-avatar">
+        <img id="userAvatar" alt="Avatar do usuário"
+          onerror="this.style.display='none'; document.querySelector('.fallback').style.display='flex';">
+        <div class="fallback" id="userAvatarFallback">?</div>
+      </div>
+      <div style="display: flex; flex-direction: column; align-items: flex-start;">
+        <span id="userNome"></span>
+        <span id="userNivelAcesso" style="font-size:0.95em; color:#667eea; font-weight:500;"></span>
+      </div>
+      <button class="menu-toggle" onclick="toggleMenu()">
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+      </button>
+      <div class="dropdown-menu" id="dropdownMenu">
+        <a href="/usuarios">👥 Editar Usuários</a>
+        <a href="#" onclick="alterarSenha()">🔒 Alterar Senha</a>
+        <a href="#" onclick="configuracoes()">⚙️ Configurações</a>
+        <a href="#" onclick="ajuda()">❓ Ajuda</a>
+        <a href="/" class="logout-option">🚪 Sair</a>
+      </div>
+    </div>
+  </header>
+
+
+  <h1>📋 Kanban de Ações</h1>
+
+  <div class="kanban-grid">
+    <div class="kanban-col" data-status="A Fazer">
+      <h3>A Fazer</h3>
+      <div class="kanban-list" id="col-a-fazer"></div>
+    </div>
+    <div class="kanban-col" data-status="Em andamento">
+      <h3>Em andamento</h3>
+      <div class="kanban-list" id="col-andamento"></div>
+    </div>
+    <div class="kanban-col" data-status="Aguardando aprovação">
+      <h3>Aguardando aprovação</h3>
+      <div class="kanban-list" id="col-aprovacao"></div>
+    </div>
+    <div class="kanban-col" data-status="Concluído">
+      <h3>Concluído</h3>
+      <div class="kanban-list" id="col-concluido"></div>
+    </div>
+  </div>
+
+  <template id="tpl-card">
+    <div class="kanban-card" draggable="true">
+      <div class="card-title"></div>
+      <div class="card-sub">
+        <span class="card-protocolo"></span>
+        <span class="card-cliente"></span>
+      </div>
+      <div class="card-footer">
+        <span class="card-criador"></span>
+        <span class="card-data"></span>
+      </div>
+    </div>
+  </template>
+
+
+
+
+  <!-- No HTML - carregar script -->
+  <script src="js/script.js"></script>
+
+
+  <script>
+    const COLS = {
+      'A Fazer': document.getElementById('col-a-fazer'),
+      'Em andamento': document.getElementById('col-andamento'),
+      'Aguardando aprovação': document.getElementById('col-aprovacao'),
+      'Concluído': document.getElementById('col-concluido')
+    };
+    const STATUS_VALIDOS = Object.keys(COLS);
+    const tpl = document.getElementById('tpl-card');
+    let draggedId = null;
+
+    function formatDate(iso) {
+      const d = new Date(iso);
+      if (isNaN(d)) return '';
+      return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function buildCard(acao) {
+      const node = tpl.content.firstElementChild.cloneNode(true);
+      node.dataset.id = acao.id;
+      node.querySelector('.card-title').textContent = acao.titulo || '(sem título)';
+      node.querySelector('.card-protocolo').textContent = acao.protocolo ? `#${acao.protocolo}` : '';
+      node.querySelector('.card-cliente').textContent = acao.cliente || '';
+      node.querySelector('.card-criador').textContent = acao.criador ? `Criado por: ${acao.criador}` : '';
+      node.querySelector('.card-data').textContent = acao.data_criacao ? formatDate(acao.data_criacao) : '';
+      node.addEventListener('dragstart', (e) => {
+        draggedId = node.dataset.id;
+        e.dataTransfer.setData('text/plain', draggedId);
+      });
+      return node;
+    }
+
+    function renderKanban(acoes) {
+      for (const col of Object.values(COLS)) col.innerHTML = '';
+      for (const acao of acoes) {
+        const status = STATUS_VALIDOS.includes(acao.status) ? acao.status : 'A Fazer';
+        COLS[status].appendChild(buildCard(acao));
+      }
+    }
+
+    async function loadMyAcoes() {
+      const res = await fetch('/api/acoes/mine', { credentials: 'same-origin' });
+      if (!res.ok) throw new Error('Falha ao carregar ações');
+      const acoes = await res.json();
+      renderKanban(acoes);
+    }
+
+    async function updateStatus(id, novoStatus) {
+      const res = await fetch(`/api/acoes/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ status: novoStatus })
+      });
+      if (!res.ok) {
+        const msg = (await res.json().catch(() => null))?.error || 'Erro';
+        throw new Error(msg);
+      }
+    }
+
+    for (const [status, colList] of Object.entries(COLS)) {
+      const col = colList.closest('.kanban-col');
+      col.addEventListener('dragover', (e) => { e.preventDefault(); col.classList.add('drag-over'); });
+      col.addEventListener('dragleave', () => col.classList.remove('drag-over'));
+      col.addEventListener('drop', async (e) => {
+        e.preventDefault(); col.classList.remove('drag-over');
+        const id = draggedId || e.dataTransfer.getData('text/plain');
+        if (!id) return;
+        try {
+          await updateStatus(id, status);
+          const card = document.querySelector(`.kanban-card[data-id="${id}"]`);
+          if (card) colList.appendChild(card);
+        } catch (err) {
+          alert('Não foi possível mover a ação: ' + err.message);
+        } finally {
+          draggedId = null;
+        }
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      try {
+        await loadMyAcoes();
+      } catch (e) {
+        console.error(e);
+        alert('Erro ao carregar Kanban: ' + e.message);
+      }
+    });
+
+  </script>
+
+</body>
+
+</html>

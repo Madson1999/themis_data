@@ -40,11 +40,10 @@ body {
 .logo-header img {
   height: 80px;
   width: auto;
-
 }
 
 /* 1.4 Classe do texto h1 */
-.logo-header h1 {
+.logo-header>h1 {
   color: #333;
   font-size: 1.5rem;
   font-weight: 600;
