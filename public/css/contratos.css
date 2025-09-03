@@ -1,0 +1,338 @@
+    /* =========================
+   LAYOUT BÁSICO / AÇÕES
+   ========================= */
+.main-content {
+  padding: 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.content-tabs {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.tab-btn {
+  background: rgba(255, 255, 255, 0.8);
+  border: none;
+  padding: 1rem 2rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: all 0.3s;
+  color: #666;
+}
+
+.tab-btn.active,
+.tab-btn:hover {
+  background: #667eea;
+  color: white;
+}
+
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+.form-container {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  padding: 2rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.form-group { display: flex; flex-direction: column; }
+
+.form-group label {
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  color: #4f46e5;
+  letter-spacing: 0.2px;
+}
+
+.form-group input,
+.form-group select {
+  padding: 0.8rem;
+  border: 1.5px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: border-color 0.3s, box-shadow 0.3s, background 0.3s;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.10), 0 1.5px 3px rgba(0, 0, 0, 0.04);
+  background: #fff;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.18), 0 2px 8px rgba(102, 126, 234, 0.10);
+  background: #f0f4ff;
+}
+
+.form-actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 2rem;
+  justify-content: flex-end;
+}
+
+.btn {
+  padding: 0.8rem 1.5rem;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 600;
+  transition: all 0.3s;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.08);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-primary {
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+}
+.btn-primary:hover {
+  background: linear-gradient(90deg, #5a6fd8 0%, #6c3eb4 100%);
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.18);
+}
+
+.btn-secondary { background: #6c757d; color: #fff; }
+.btn-secondary:hover { background: #5a6268; }
+
+.btn-success { background: #28a745; color: #fff; }
+.btn-success:hover { background: #218838; }
+
+.btn-danger {
+  background: linear-gradient(90deg, #dc3545 0%, #b91c1c 100%);
+  color: #fff;
+}
+.btn-danger:hover {
+  background: linear-gradient(90deg, #c82333 0%, #991b1b 100%);
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 4px 16px rgba(220, 53, 69, 0.18);
+}
+
+.btn-sm { padding: 0.4rem 1rem; font-size: 0.9rem; border-radius: 6px; }
+
+.action-buttons { display: flex; gap: 0.5rem; }
+.action-buttons .btn { border-radius: 50px; min-width: 36px; justify-content: center; }
+
+/* =========================
+   TABELA: HISTÓRICO CONTRATOS
+   ========================= */
+:root{
+  /* ajuste aqui a altura visível do bloco da tabela */
+  --contratos-max-height: 500px;
+}
+
+.table-container {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  padding: 2rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+}
+.table-header {
+  padding-bottom: 1rem;
+  background: rgba(255, 255, 255, 0.95);
+  z-index: 10;
+}
+
+/* aqui sim limitamos altura e scroll */
+.table-scroll {
+  max-height: 380px;   /* ajuste como quiser */
+  overflow-y: auto;
+  margin-top: 1rem;
+  border-radius: 8px;
+  border: 1px solid #eee;
+}
+
+.table-scroll table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.table-scroll thead th {
+  position: sticky;
+  top: 0;
+  background: #f8f9fa;
+  z-index: 2;
+  box-shadow: 0 2px 2px rgba(0,0,0,0.05);
+}
+
+#contratosTable {
+  width: 100%;
+  border-collapse: separate !important;
+  border-spacing: 0;
+  table-layout: fixed; /* melhor truncar com ellipsis */
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 2px 12px rgba(102, 126, 234, 0.08);
+}
+
+#contratosTable thead th {
+  position: sticky;
+  top: 0;
+  background: #f8f9fa;
+  z-index: 2;
+  box-shadow: 0 2px 2px rgba(0,0,0,0.05);
+}
+
+#contratosTable th,
+#contratosTable td {
+  padding: 1rem;
+  text-align: left;
+  border-bottom: 1px solid #eee;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#contratosTable tr:nth-child(even) { background: #f4f6fb; }
+#contratosTable tr:hover { background: #e0e7ff; transition: background 0.2s; }
+
+/* =========================
+        MENSAGENS
+   ========================= */
+.message {
+  padding: 1rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+  display: none;
+}
+.message.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+.message.error   { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+
+/* =========================
+      RESPONSIVIDADE
+   ========================= */
+@media (max-width: 768px) {
+  .header { padding: 1rem; flex-direction: column; gap: 1rem; }
+  .main-content { padding: 1rem; }
+  .form-grid { grid-template-columns: 1fr; }
+  .modal-content { max-width: 98vw; padding: 1rem; }
+  table, th, td { font-size: 0.95rem; }
+  :root { --contratos-max-height: 340px; }
+}
+
+/*=========================
+    AUTOCOMPLETE CLIENTE
+========================= */
+.autocomplete {
+  position: relative;
+}
+
+.autocomplete .suggestions {
+  position: absolute;
+  inset-inline: 0;          /* ocupa toda a largura do input */
+  top: calc(100% + 6px);
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.08);
+  max-height: 280px;
+  overflow: auto;
+  z-index: 50;
+}
+
+.autocomplete .suggestions li {
+  padding: .65rem .75rem;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: .95rem;
+}
+
+.autocomplete .suggestions li:hover,
+.autocomplete .suggestions li.active {
+  background: #eef2ff;
+}
+
+.autocomplete .sug-nome {
+  font-weight: 600;
+  color: #111827;
+}
+
+.autocomplete .sug-doc {
+  color: #6b7280;
+  font-variant-numeric: tabular-nums;
+}
+
+/* =========================
+   INPUT DE BUSCA CLIENTE
+   ========================= */
+.autocomplete input[type="text"] {
+  width: 100%;
+  padding: 0.8rem;
+  border: 1.5px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: border-color 0.3s, box-shadow 0.3s, background 0.3s;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.10), 0 1.5px 3px rgba(0, 0, 0, 0.04);
+  background: #fff;
+}
+
+.autocomplete input[type="text"]:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.18),
+              0 2px 8px rgba(102, 126, 234, 0.10);
+  background: #f0f4ff;
+}
+
+
+.modal {
+  display: block;
+  position: fixed;
+  z-index: 1000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0,0,0,0.4);
+}
+
+.modal-content {
+  background: #fff;
+  margin: 7% auto;
+  padding: 0;
+  border-radius: 8px;
+  width: 80%;
+  max-width: 800px;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.modal-header,
+.modal-footer {
+  padding: 15px 20px;
+  border-bottom: 1px solid #ddd;
+}
+
+.modal-footer {
+  border-top: 1px solid #ddd;
+  text-align: right;
+}
+
+.close {
+  float: right;
+  font-size: 28px;
+  cursor: pointer;
+}

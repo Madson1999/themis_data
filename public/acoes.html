@@ -14,74 +14,6 @@
       margin: 0 auto;
     }
 
-    .menu-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 1.5rem;
-      margin-top: 2rem;
-    }
-
-    .menu-card {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      border-radius: 12px;
-      padding: 2rem;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-      transition: transform 0.3s, box-shadow 0.3s;
-      cursor: pointer;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-    }
-
-    .menu-card:hover {
-      transform: translateY(-5px);
-      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
-    }
-
-    .menu-card h3 {
-      color: #333;
-      margin-bottom: 1rem;
-      font-size: 1.3rem;
-    }
-
-    .menu-card p {
-      color: #666;
-      margin-bottom: 1.5rem;
-      line-height: 1.6;
-    }
-
-    .menu-card .icon {
-      font-size: 2.5rem;
-      margin-bottom: 1rem;
-      color: #667eea;
-    }
-
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 1rem;
-      margin-bottom: 2rem;
-    }
-
-    .stat-card {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      border-radius: 8px;
-      padding: 1.5rem;
-      text-align: center;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-    }
-
-    .stat-number {
-      font-size: 2rem;
-      font-weight: bold;
-      color: #667eea;
-      margin-bottom: 0.5rem;
-    }
-
-    .stat-label {
-      color: #666;
-      font-size: 0.9rem;
-    }
 
     @media (max-width: 768px) {
       .header {
@@ -94,11 +26,9 @@
         padding: 1rem;
       }
 
-      .menu-grid {
-        grid-template-columns: 1fr;
-      }
     }
 
+    /* Botão criar, acompanhar e corrigir */
     .aba-btn {
       padding: 0.7rem 1.5rem;
       border: none;
@@ -119,6 +49,7 @@
       margin-top: 1.5rem;
     }
 
+    /*Card principal da criação da ação */
     .form-acao {
       background: #fff;
       border-radius: 10px;
@@ -358,6 +289,7 @@
     }
 
     .kanban-board {
+      margin-top: -24px;
       display: flex;
       gap: 1.5rem;
       min-width: max-content;
@@ -786,14 +718,13 @@
   </header>
 
   <main class="main-content">
-    <div style="display: flex; gap: 1rem; margin-bottom: 2rem;">
+    <div style="display: flex; gap: 1rem;">
       <button type="button" class="aba-btn" onclick="mostrarAba('criar')">Criar Ação</button>
       <button type="button" class="aba-btn" onclick="mostrarAba('acompanhar')">Acompanhar Ações</button>
       <button type="button" class="aba-btn" onclick="mostrarAba('corrigir')">Corrigir Ações</button>
     </div>
 
     <section id="aba-criar" class="aba-section">
-      <h2>Criar Nova Ação</h2>
       <form id="formAcao" autocomplete="off" class="form-acao">
         <div class="form-grid">
           <div class="form-group">
@@ -872,7 +803,6 @@
     </section>
 
     <section id="aba-acompanhar" class="aba-section" style="display:none">
-      <h2>Acompanhar Ações</h2>
       <div class="kanban-container">
         <div class="kanban-board" id="kanbanBoard">
           <!-- Colunas serão criadas dinamicamente -->
@@ -881,7 +811,6 @@
     </section>
 
     <section id="aba-corrigir" class="aba-section" style="display:none">
-      <h2>Corrigir Ações</h2>
       <div class="kanban-container">
         <div class="kanban-board" id="kanbanBoardCorrigir">
           <!-- Colunas serão criadas dinamicamente -->

@@ -7,7 +7,6 @@ Esta pasta é destinada para armazenar arquivos de contratos e documentos relaci
 ```
 contratos/
 ├── modelos/           # Modelos de contratos base
-├── arquivos/          # Arquivos Word e outros documentos
 ├── gerados/           # Contratos gerados pelo sistema
 └── README.md         # Este arquivo
 ```

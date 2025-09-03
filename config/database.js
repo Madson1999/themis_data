@@ -127,18 +127,20 @@ async function initializeDatabase() {
     const createAcoes = `
     CREATE TABLE IF NOT EXISTS acoes (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    protocolo BOOLEAN,
+    protocolado BOOLEAN,
     cliente_id INT,
     titulo VARCHAR(60),
     designado_id INT,
     criador_id INT,
     status VARCHAR(20),
-    data_concluido TIME,
-    data_aprovado TIME,
-    arquivo_path VARCHAR(500),
+    data_concluido DATE,
+    data_aprovado DATE,
+    comentario VARCHAR(500),
+    arquivo_path LONGTEXT,
     data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
-    `;
+  `;
+
 
     await executeQuery(createAcoes);
     await executeQuery(createUsersTable);

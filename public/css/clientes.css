@@ -165,57 +165,114 @@
   justify-content: center;
 }
 
+/* =========================
+   LISTA DE CLIENTES / TABELA
+   ========================= */
+
 .table-container {
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(10px);
   border-radius: 12px;
   padding: 2rem;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-  overflow-x: auto;
+  display: flex;
+  flex-direction: column;
+  max-height: 500px;
 }
 
 .table-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  background: rgba(255, 255, 255, 0.95);
+  z-index: 10;
 }
 
-.search-box {
-  display: flex;
-  gap: 1rem;
-  align-items: center;
-}
-
-.search-box input {
-  padding: 0.5rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  width: 300px;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 1rem;
-  background: #fff;
+.table-scroll {
+  max-height: 500px;
+  overflow-y: auto;
   border-radius: 10px;
-  overflow: hidden;
-  box-shadow: 0 2px 12px rgba(102, 126, 234, 0.08);
+  position: relative;
 }
 
-th,
-td {
+#clientesTable {
+  width: 100%;
+  border-collapse: separate !important;
+  border-spacing: 0;
+  table-layout: fixed;
+}
+
+#clientesTable thead th {
+  position: sticky;
+  top: 0;
+  background: #f8f9fa;
+  z-index: 2;
+  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.05);
+}
+
+#clientesTable th,
+#clientesTable td {
   padding: 1rem;
   text-align: left;
   border-bottom: 1px solid #eee;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-th {
-  background: #f8f9fa;
-  font-weight: 700;
-  color: #4f46e5;
-  letter-spacing: 0.3px;
+/* =========================
+   CAMPO DE PESQUISA CLIENTES
+   ========================= */
+.search-box {
+  position: relative;
+  /* necessário para posicionar a lupa */
+  display: flex;
+  justify-content: left;
+  margin: 8px 0px -10px 0px;
+}
+
+.search-box input {
+  width: 100%;
+  max-width: 400px;
+  /* largura máxima igual contratos.html */
+  padding: 0.75rem 1rem 0.75rem 2.8rem;
+  /* espaço extra à esquerda para a lupa */
+  border: 1.5px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 1rem;
+  outline: none;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.10);
+  background: #fff;
+}
+
+.search-box input:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.25);
+  background: #f0f4ff;
+}
+
+/* Ícone de lupa dentro do input */
+.search-box::before {
+  content: "\1F50D";
+  /* Unicode da lupa 🔍 */
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.1rem;
+  color: #666;
+  pointer-events: none;
+  /* não atrapalha o clique no input */
+}
+
+
+
+table {
+  width: 100%;
+  margin-top: 1rem;
+  background: #fff;
+  border-radius: 10px;
+  overflow: visible;
+  box-shadow: 0 2px 12px rgba(102, 126, 234, 0.08);
 }
 
 tr:nth-child(even) {
@@ -246,7 +303,9 @@ tr:hover {
   border: 1px solid #f5c6cb;
 }
 
-/* Modal aprimorado */
+/* =========================
+            MODAL
+   ========================= */
 .modal {
   display: none;
   position: fixed;
@@ -314,7 +373,9 @@ tr:hover {
   color: #4f46e5;
 }
 
-/* Responsividade aprimorada */
+/* =========================
+        RESPONSIVIDADE
+   ========================= */
 @media (max-width: 768px) {
   .header {
     padding: 1rem;

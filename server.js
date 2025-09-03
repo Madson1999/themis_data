@@ -1,11 +1,13 @@
 const express = require('express');
-const cors = require('cors');
 const bodyParser = require('body-parser');
 const path = require('path');
 const fs = require('fs-extra');
 const multer = require('multer');
 require('dotenv').config();
 const cookieParser = require('cookie-parser');
+const mysql = require('mysql2/promise');
+const archiver = require('archiver');
+const db = require('./config/database.js');
 
 // Importar configuração do banco de dados
 const { testConnection, executeQuery, initializeDatabase } = require('./config/database');
@@ -77,22 +79,16 @@ app.get('/usuarios', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'usuarios.html'));
 });
 
-// Rota para buscar registros aprovados
+// Rota para buscar registros aprovados (agora trazendo protocolado)
 app.get('/api/protocolacao', async (req, res) => {
   try {
     const sql = `
-      SELECT id, cliente, titulo, designado, status, data_aprovado
+      SELECT id, cliente, titulo, designado, protocolado, data_aprovado
       FROM acoes
       WHERE data_aprovado IS NOT NULL
       ORDER BY data_aprovado DESC
     `;
-
-    // se seu executeQuery recebe (sql, params):
-    const result = await executeQuery(sql, []);
-
-    // compat: pode vir como rows ou [rows]
-    const rows = Array.isArray(result) && Array.isArray(result[0]) ? result[0] : result;
-
+    const rows = await executeQuery(sql, []);
     res.json(rows);
   } catch (err) {
     console.error('Erro ao buscar protocolação:', err);
@@ -100,16 +96,197 @@ app.get('/api/protocolacao', async (req, res) => {
   }
 });
 
-// API de clientes - Listar todos
+
+// PUT /api/protocolacao/:id/protocolar
+app.put('/api/protocolacao/:id/protocolar', async (req, res) => {
+  const { id } = req.params;
+  try {
+    await executeQuery('UPDATE acoes SET protocolado = 1 WHERE id = ?', [id]);
+    res.json({ sucesso: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao atualizar registro' });
+  }
+});
+
+
+
+// === LISTAR ARQUIVOS DA AÇÃO (usa acoes.arquivo_path) ===
+app.get('/api/protocolacao/:id/arquivos', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const rows = await executeQuery('SELECT arquivo_path FROM acoes WHERE id = ?', [id]);
+    if (!rows.length || !rows[0].arquivo_path) {
+      return res.json([]); // sem pasta -> sem arquivos
+    }
+
+    const pasta = rows[0].arquivo_path;
+    const existe = await fs.pathExists(pasta);
+    if (!existe) return res.json([]);
+
+    const nomes = await fs.readdir(pasta);
+    // Só arquivos (ignora subpastas)
+    const lista = [];
+    for (const nome of nomes) {
+      const abs = path.join(pasta, nome);
+      const stat = await fs.stat(abs);
+      if (stat.isFile()) {
+        lista.push({
+          nome,
+          tamanho: stat.size,
+          mtime: stat.mtime,
+          // URL de download individual (rota abaixo)
+          url: `/api/protocolacao/${id}/arquivo?nome=${encodeURIComponent(nome)}`
+        });
+      }
+    }
+    res.json(lista);
+  } catch (err) {
+    console.error('Erro /api/protocolacao/:id/arquivos', err);
+    res.status(500).json([]);
+  }
+});
+
+// === DOWNLOAD INDIVIDUAL ===
+app.get('/api/protocolacao/:id/arquivo', async (req, res) => {
+  const { id } = req.params;
+  const { nome } = req.query;
+  if (!nome) return res.status(400).send('Nome do arquivo é obrigatório');
+
+  try {
+    const rows = await executeQuery('SELECT arquivo_path FROM acoes WHERE id = ?', [id]);
+    if (!rows.length || !rows[0].arquivo_path) return res.status(404).send('Ação ou pasta não encontrada');
+
+    const pasta = rows[0].arquivo_path;
+
+    // Segurança: impede path traversal
+    if (nome.includes('..') || nome.includes('/') || nome.includes('\\')) {
+      return res.status(400).send('Nome de arquivo inválido');
+    }
+
+    const abs = path.join(pasta, nome);
+    const existe = await fs.pathExists(abs);
+    if (!existe) return res.status(404).send('Arquivo não encontrado');
+
+    res.download(abs, nome); // força download
+  } catch (err) {
+    console.error('Erro /api/protocolacao/:id/arquivo', err);
+    res.status(500).send('Erro ao baixar arquivo');
+  }
+});
+
+
+
+
+
+
+// API de clientes - Listar (busca por nome E/OU CPF/CNPJ)
 app.get('/api/clientes', async (req, res) => {
   try {
-    const clientes = await executeQuery('SELECT * FROM cliente ORDER BY nome');
+    const termoBruto = (req.query.searchTerm || '').trim();
+
+    // Sem termo: lista tudo
+    if (!termoBruto) {
+      const clientes = await executeQuery('SELECT * FROM cliente ORDER BY nome');
+      return res.json(clientes);
+    }
+
+    const somenteDigitos = termoBruto.replace(/\D/g, '');
+    const partesNome = termoBruto
+      .normalize('NFD')               // remove acentos (cliente pode digitar sem acento)
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .split(/\s+/)
+      .filter(p => p.length > 0);
+
+    const where = [];
+    const params = [];
+
+    // Nome: exige TODAS as palavras (AND), ignorando caixa/acentos
+    // Usando LOWER(nome) pra ser case-insensitive (desde que collation ajude com acentos)
+    if (partesNome.length) {
+      partesNome.forEach(p => {
+        where.push('LOWER(nome) LIKE ?');
+        params.push(`%${p.toLowerCase()}%`);
+      });
+    }
+
+    // CPF/CNPJ: só entra se tiver pelo menos 3 dígitos (evita LIKE '%%')
+    if (somenteDigitos.length >= 3) {
+      where.push(
+        "REPLACE(REPLACE(REPLACE(REPLACE(cpf_cnpj, '.', ''), '-', ''), '/', ''), ' ', '') LIKE ?"
+      );
+      params.push(`%${somenteDigitos}%`);
+    }
+
+    // Se o usuário digitou só símbolos/espaços, não retorna tudo por engano
+    if (where.length === 0) {
+      return res.json([]);
+    }
+
+    // Junta as condições: nome (todas as palavras em AND) OU cpf
+    // Ex.: (nome LIKE ? AND nome LIKE ?) OR cpf LIKE ?
+    const nomeConds = where.slice(0, partesNome.length);
+    const cpfConds = where.slice(partesNome.length);
+    const sql =
+      `SELECT * FROM cliente
+       WHERE ${[
+        nomeConds.length ? `(${nomeConds.join(' AND ')})` : null,
+        cpfConds.length ? `(${cpfConds.join(' AND ')})` : null
+      ].filter(Boolean).join(' OR ')}
+       ORDER BY nome`;
+
+    const clientes = await executeQuery(sql, params);
     res.json(clientes);
   } catch (error) {
     console.error('Erro ao buscar clientes:', error);
     res.status(500).json({ erro: 'Erro ao buscar clientes' });
   }
 });
+
+// GET /api/clientes/contratos?q=...
+app.get('/api/clientes/contratos', async (req, res) => {
+  try {
+    const qRaw = (req.query.q || '').trim();
+    if (!qRaw) return res.json([]); // não retorna nada sem termo
+
+    const qLike = `%${qRaw}%`;
+    const qDigits = qRaw.replace(/\D+/g, ''); // apenas números
+
+    let sql, params;
+
+    if (qDigits.length > 0 && qRaw.match(/^\d+$/)) {
+      // se usuário digitou só números => buscar por cpf/cnpj
+      sql = `
+        SELECT id, nome, cpf_cnpj
+        FROM cliente
+        WHERE REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(cpf_cnpj, '.', ''), '-', ''), '/', ''), ' ', ''), '\\\\', '') LIKE ?
+        ORDER BY nome
+        LIMIT 20
+      `;
+      params = [`%${qDigits}%`];
+    } else {
+      // se digitou texto => buscar por nome
+      sql = `
+        SELECT id, nome, cpf_cnpj
+        FROM cliente
+        WHERE nome COLLATE utf8mb4_general_ci LIKE ?
+        ORDER BY nome
+        LIMIT 20
+      `;
+      params = [qLike];
+    }
+
+    const rows = await executeQuery(sql, params);
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ mensagem: 'Erro ao buscar clientes para contratos' });
+  }
+});
+
+
+
 
 // API de clientes - Cadastrar novo
 app.post('/api/clientes', async (req, res) => {
@@ -378,11 +555,12 @@ app.post('/api/contratos/gerar', async (req, res) => {
 app.get('/api/contratos', async (req, res) => {
   try {
     const contratos = await executeQuery(`
-      SELECT c.*, cl.nome as cliente_nome 
-      FROM contratos c 
-      JOIN cliente cl ON c.cliente_id = cl.id 
-      ORDER BY c.data_geracao DESC
-    `);
+  SELECT c.*, cl.nome AS cliente_nome
+  FROM contratos c
+  JOIN cliente cl ON c.cliente_id = cl.id
+  ORDER BY c.data_geracao DESC
+  LIMIT 20
+`);
     res.json(contratos);
   } catch (error) {
     console.error('Erro ao buscar contratos:', error);

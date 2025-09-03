@@ -2,9 +2,9 @@
 <html lang="pt-br">
 
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="/css/styles.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="/css/styles.css" />
   <title>Themis Data - Protocolação</title>
 
   <style>
@@ -16,18 +16,146 @@
       font-size: 28px;
     }
 
-    /* Container da tabela */
+    /* ===========================
+     FILTROS (aprimorado)
+     =========================== */
+    .filtros {
+      --c1: #667eea;
+      /* cor primária */
+      --c1d: #4953b8;
+      /* primária escura */
+      --line: #d1d5db;
+      /* bordas */
+      --ring: rgba(102, 126, 234, .35);
+
+      width: 90%;
+      margin: 1% auto 15px auto;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: flex-end;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px 16px;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, .05);
+    }
+
+    .filtro-grupo {
+      display: flex;
+      flex-direction: column;
+      min-width: 180px;
+      flex: 1;
+    }
+
+    .filtros label {
+      font-weight: 600;
+      color: #34495e;
+      font-size: 13px;
+      margin-bottom: 4px;
+      display: block;
+    }
+
+    .filtros input[type="date"],
+    .filtros select {
+      padding: 9px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #f9fafb;
+      color: #111827;
+      font-size: 14px;
+      transition: border-color .2s, box-shadow .2s, background .2s;
+      outline: none;
+    }
+
+    .filtros input[type="date"]:hover,
+    .filtros select:hover {
+      border-color: #cdd3df;
+    }
+
+    .filtros input[type="date"]:focus,
+    .filtros select:focus {
+      border-color: var(--c1);
+      box-shadow: 0 0 0 3px var(--ring);
+      background: #fff;
+    }
+
+    .btn {
+      border: none;
+      border-radius: 8px;
+      padding: 10px 14px;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 14px;
+      transition: transform .05s ease, box-shadow .2s ease, background .2s ease;
+      white-space: nowrap;
+    }
+
+    .btn:active {
+      transform: translateY(1px);
+    }
+
+    .btn-filtrar {
+      background: linear-gradient(92deg, #667eea 0%, #4953b8 100%);
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(102, 126, 234, .18);
+    }
+
+    .btn-filtrar:hover {
+      box-shadow: 0 6px 16px rgba(102, 126, 234, .22);
+    }
+
+    .btn-limpar {
+      background: #f1f5f9;
+      color: #1f2937;
+      border: 1px solid #e2e8f0;
+    }
+
+    .btn-limpar:hover {
+      background: #e2e8f0;
+    }
+
+    .btn-baixar {
+      background: #10b981;
+      color: #fff;
+      text-decoration: none;
+    }
+
+    .btn-protocolar {
+      background: #2563eb;
+      color: #fff;
+    }
+
+    /* Badges True/False */
+    .badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .badge-ok {
+      background: #dcfce7;
+      color: #166534;
+    }
+
+    .badge-no {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    /* Tabela */
     table {
       width: 90%;
       margin: auto;
       border-collapse: collapse;
       background: white;
-      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.05);
+      box-shadow: 0 3px 8px rgba(0, 0, 0, .05);
       border-radius: 8px;
       overflow: hidden;
     }
 
-    /* Cabeçalho da tabela */
     thead {
       background-color: #007bff;
       color: white;
@@ -39,31 +167,34 @@
       font-size: 14px;
     }
 
-    /* Linhas da tabela */
     tbody td {
       padding: 10px;
       border-bottom: 1px solid #eee;
       font-size: 14px;
+      vertical-align: middle;
     }
 
-    /* Efeito zebra */
     tbody tr:nth-child(even) {
       background-color: #f8f9fa;
     }
 
-    /* Hover */
     tbody tr:hover {
       background-color: #e9f2ff;
     }
 
-    /* Texto centralizado para mensagens */
     tbody td[colspan] {
       text-align: center;
       font-style: italic;
       color: #888;
     }
 
-    /* Responsivo para celular */
+    .acoes {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    /* Responsivo */
     @media (max-width: 768px) {
 
       table,
@@ -99,7 +230,127 @@
         content: attr(data-label);
         font-weight: bold;
         color: #555;
+        margin-right: 10px;
       }
+
+      .filtros {
+        width: 92%;
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .filtro-grupo {
+        min-width: 100%;
+      }
+    }
+
+    /* ===== Modal (mesmo visual do seu exemplo) ===== */
+    .modal-docs {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-docs.show {
+      display: flex;
+    }
+
+    .modal-docs-bg {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, .35);
+    }
+
+    .modal-docs-content {
+      position: relative;
+      background: #fff;
+      border-radius: 10px;
+      padding: 2rem 2.5rem 1.5rem 2.5rem;
+      min-width: 320px;
+      max-width: 95vw;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, .18);
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .modal-docs-close {
+      position: absolute;
+      top: .7rem;
+      right: 1.2rem;
+      background: none;
+      border: none;
+      font-size: 2rem;
+      color: #4953b8;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .modal-docs-content h3 {
+      margin: 0 0 1.2rem 0;
+      color: #4953b8;
+      font-size: 1.25rem;
+      font-weight: 600;
+    }
+
+    .modal-docs-lista {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: .7rem;
+    }
+
+    .modal-docs-arquivos {
+      display: flex;
+      flex-direction: column;
+      gap: .5rem;
+      width: 100%;
+    }
+
+    .modal-docs-arquivo-card {
+      display: flex;
+      align-items: center;
+      background: #fff;
+      border-radius: 6px;
+      padding: .5rem .8rem;
+      font-size: .98rem;
+      color: #4953b8;
+      box-shadow: 0 1px 4px rgba(102, 126, 234, .07);
+      gap: .7rem;
+    }
+
+    .modal-docs-arquivo-icon {
+      font-size: 1.3rem;
+      color: #667eea;
+      margin-right: .5rem;
+    }
+
+    .modal-docs-arquivo-nome {
+      flex: 1;
+      word-break: break-all;
+    }
+
+    .modal-docs-arquivo-link {
+      color: #667eea;
+      text-decoration: underline;
+      font-weight: 500;
+      margin-left: .7rem;
+      font-size: 1.1em;
+    }
+
+    .modal-docs-arquivo-link:hover {
+      color: #4953b8;
+    }
+
+    .modal-docs-empty {
+      color: #888;
+      background: #f8f9fa;
+      border-radius: 6px;
+      padding: .8rem 1rem;
     }
   </style>
 
@@ -117,9 +368,9 @@
           onerror="this.style.display='none'; document.querySelector('.fallback').style.display='flex';">
         <div class="fallback" id="userAvatarFallback">?</div>
       </div>
-      <div style="display: flex; flex-direction: column; align-items: flex-start;">
+      <div style="display:flex; flex-direction:column; align-items:flex-start;">
         <span id="userNome"></span>
-        <span id="userNivelAcesso" style="font-size:0.95em; color:#667eea; font-weight:500;"></span>
+        <span id="userNivelAcesso" style="font-size:.95em; color:#667eea; font-weight:500;"></span>
       </div>
       <button class="menu-toggle" onclick="toggleMenu()">
         <div class="bar"></div>
@@ -137,7 +388,26 @@
   </header>
 
   <div class="tabela">
-    <h1>📂 Protocolação</h1>
+    <!-- Filtro por data -->
+    <div class="filtros">
+      <div class="filtro-grupo">
+        <label for="filtroData">Data de Aprovação</label>
+        <input type="date" id="filtroData">
+      </div>
+
+      <button class="btn btn-filtrar" id="btnFiltrar">🔍 Filtrar</button>
+      <button class="btn btn-limpar" id="btnLimpar">↺ Limpar</button>
+
+      <div class="filtro-grupo">
+        <label for="filtroProt">Protocolado</label>
+        <select id="filtroProt">
+          <option value="nao">Não protocolados</option>
+          <option value="sim">Protocolados</option>
+          <option value="todos">Todos</option>
+        </select>
+      </div>
+    </div>
+
     <table border="1">
       <thead>
         <tr>
@@ -145,53 +415,203 @@
           <th>Cliente</th>
           <th>Título</th>
           <th>Designado</th>
-          <th>Status</th>
+          <th>Protocolado</th>
           <th>Data Aprovado</th>
+          <th>Ações</th>
         </tr>
       </thead>
       <tbody id="tabela-protocolacao">
         <tr>
-          <td colspan="6">Carregando...</td>
+          <td colspan="7">Carregando...</td>
         </tr>
       </tbody>
     </table>
   </div>
 
+  <!-- Modal de Documentos -->
+  <div id="modalDocumentos" class="modal-docs">
+    <div class="modal-docs-bg" onclick="fecharModalDocumentos()"></div>
+    <div class="modal-docs-content">
+      <button class="modal-docs-close" onclick="fecharModalDocumentos()">×</button>
+      <h3 id="modalDocsTitulo">Documentos da Ação</h3>
+      <div id="modalDocsLista" class="modal-docs-lista"></div>
+    </div>
+  </div>
 
-  <!-- No HTML - carregar script -->
   <script src="js/script.js"></script>
 
   <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      fetch('/api/protocolacao')
-        .then(res => res.json())
-        .then(dados => {
-          const tbody = document.getElementById('tabela-protocolacao');
-          tbody.innerHTML = '';
+    // ----- helpers -----
+    function formatarSomenteData(valor) {
+      if (!valor) return "";
+      if (/^\d{4}-\d{2}-\d{2}$/.test(valor)) {
+        const [y, m, d] = valor.split("-");
+        return `${d}/${m}/${y}`;
+      }
+      const dt = new Date(valor);
+      return isNaN(dt.getTime()) ? String(valor) : dt.toLocaleDateString('pt-BR');
+    }
 
-          if (dados.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6">Nenhum registro encontrado</td></tr>';
-            return;
-          }
+    const filtro = { dataAprovado: '', protocolado: 'nao' };
 
-          dados.forEach(item => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                    <td>${item.id}</td>
-                    <td>${item.cliente}</td>
-                    <td>${item.titulo}</td>
-                    <td>${item.designado}</td>
-                    <td>${item.status}</td>
-                    <td>${new Date(item.data_aprovado).toLocaleString('pt-BR')}</td>
-                `;
-            tbody.appendChild(tr);
+    // ----- render tabela -----
+    async function carregarProtocolacao() {
+      const tbody = document.getElementById('tabela-protocolacao');
+      tbody.innerHTML = '<tr><td colspan="7">Carregando...</td></tr>';
+
+      try {
+        const res = await fetch('/api/protocolacao');
+        let dados = await res.json();
+
+
+        // precisa ter data_aprovado (SEM filtrar protocolado aqui!)
+        dados = dados.filter(item => item.data_aprovado);
+
+        // filtro por data (YYYY-MM-DD)
+        if (filtro.dataAprovado) {
+          dados = dados.filter(item => {
+            const iso = /^\d{4}-\d{2}-\d{2}$/.test(item.data_aprovado)
+              ? item.data_aprovado
+              : new Date(item.data_aprovado).toISOString().split('T')[0];
+            return iso === filtro.dataAprovado;
           });
-        })
-        .catch(err => {
-          console.error('Erro ao carregar dados:', err);
+        }
+
+        // filtro de protocolado (novo select)
+        if (filtro.protocolado !== 'todos') {
+          const mostrarSoProtocolados = (filtro.protocolado === 'sim');
+          dados = dados.filter(item => mostrarSoProtocolados ? item.protocolado : !item.protocolado);
+        }
+
+        tbody.innerHTML = '';
+
+        if (dados.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7">Nenhum registro encontrado</td></tr>';
+          return;
+        }
+
+        dados.forEach(item => {
+          const tr = document.createElement('tr');
+          const isProt = item.protocolado;
+
+          tr.innerHTML = `
+        <td data-label="ID">${item.id}</td>
+        <td data-label="Cliente">${item.cliente ?? ''}</td>
+        <td data-label="Título">${item.titulo ?? ''}</td>
+        <td data-label="Designado">${item.designado ?? ''}</td>
+        <td data-label="Protocolado">
+          ${isProt ? '<span class="badge badge-ok">✅ Protocolado</span>' : '<span class="badge badge-no">❌ Não Protocolado</span>'}
+        </td>
+        <td data-label="Data Aprovado">${/^\d{4}-\d{2}-\d{2}$/.test(item.data_aprovado)
+              ? item.data_aprovado.split('-').reverse().join('/')
+              : new Date(item.data_aprovado).toLocaleDateString('pt-BR')
+            }</td>
+        <td data-label="Ações">
+          <div class="acoes">
+            <button class="btn btn-baixar" title="Ver e baixar arquivos"
+              onclick="verArquivos(${item.id}, '${(item.titulo || '').replace(/'/g, "\\'")}')">📂 Arquivos</button>
+            ${isProt ? '' : `<button class="btn btn-protocolar" onclick="marcarProtocolado(${item.id})" title="Marcar como protocolado">✅ Protocolar</button>`}
+          </div>
+        </td>
+      `;
+          tbody.appendChild(tr);
         });
+
+      } catch (err) {
+        console.error('Erro ao carregar dados:', err);
+        tbody.innerHTML = '<tr><td colspan="7">Erro ao carregar dados</td></tr>';
+      }
+    }
+
+
+    async function marcarProtocolado(id) {
+      const ok = confirm("Confirma que já protocolou este processo no Projudi (ou outro sistema)?");
+      if (!ok) return;
+      try {
+        const res = await fetch(`/api/protocolacao/${id}/protocolar`, { method: 'PUT' });
+        if (res.ok) {
+          alert("✅ Protocolado com sucesso!");
+          carregarProtocolacao();
+        } else {
+          const txt = await res.text().catch(() => '');
+          alert("⚠️ Erro ao atualizar. " + (txt || "Tente novamente."));
+        }
+      } catch (err) {
+        console.error(err);
+        alert("❌ Erro de conexão com o servidor.");
+      }
+    }
+
+    // ----- Modal -----
+    function abrirModalDocumentos(titulo) {
+      document.getElementById('modalDocsTitulo').textContent = titulo || 'Documentos da Ação';
+      document.getElementById('modalDocumentos').classList.add('show');
+    }
+    function fecharModalDocumentos() {
+      document.getElementById('modalDocumentos').classList.remove('show');
+      document.getElementById('modalDocsLista').innerHTML = '';
+    }
+
+    async function verArquivos(acaoId, titulo) {
+      const lista = document.getElementById('modalDocsLista');
+      lista.innerHTML = '<div class="modal-docs-empty">Carregando arquivos...</div>';
+      abrirModalDocumentos(`Documentos da Ação #${acaoId} — ${titulo}`);
+
+      try {
+        const res = await fetch(`/api/protocolacao/${acaoId}/arquivos`);
+        const arquivos = await res.json();
+
+        if (!arquivos || !arquivos.length) {
+          lista.innerHTML = '<div class="modal-docs-empty">Nenhum arquivo encontrado nesta ação.</div>';
+          return;
+        }
+
+        const wrap = document.createElement('div');
+        wrap.className = 'modal-docs-arquivos';
+
+        arquivos.forEach(a => {
+          const card = document.createElement('div');
+          card.className = 'modal-docs-arquivo-card';
+          card.innerHTML = `
+            <span class="modal-docs-arquivo-icon">📄</span>
+            <span class="modal-docs-arquivo-nome" title="${a.nome}">${a.nome}</span>
+            <a class="modal-docs-arquivo-link" href="${a.url}" target="_blank" rel="noopener" title="Baixar">⬇️ Baixar</a>
+          `;
+          wrap.appendChild(card);
+        });
+
+        lista.innerHTML = '';
+        lista.appendChild(wrap);
+      } catch (e) {
+        console.error(e);
+        lista.innerHTML = '<div class="modal-docs-empty">Erro ao carregar os arquivos.</div>';
+      }
+    }
+
+    // ----- Filtros -----
+    document.getElementById('btnFiltrar').addEventListener('click', () => {
+      filtro.dataAprovado = document.getElementById('filtroData').value || '';
+      filtro.protocolado = document.getElementById('filtroProt').value;
+      carregarProtocolacao();
     });
 
+    document.getElementById('btnLimpar').addEventListener('click', () => {
+      document.getElementById('filtroData').value = '';
+      document.getElementById('filtroProt').value = 'nao';
+      filtro.dataAprovado = '';
+      filtro.protocolado = 'nao';
+      carregarProtocolacao();
+    });
+
+    document.getElementById('filtroProt').addEventListener('change', e => {
+      filtro.protocolado = e.target.value;
+      carregarProtocolacao();
+    });
+
+    // ----- Inicializa -----
+    document.addEventListener('DOMContentLoaded', () => {
+      carregarProtocolacao();
+    });
   </script>
 </body>
 
