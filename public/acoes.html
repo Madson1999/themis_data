@@ -9,7 +9,6 @@
 
   <style>
     .main-content {
-      padding: 2rem;
       max-width: 1400px;
       margin: 0 auto;
     }
@@ -745,9 +744,9 @@
           <div class="form-group">
             <label for="status">Status <span class="req">*</span></label>
             <select id="status" name="status" required>
-              <option value="não iniciado">Não iniciado</option>
-              <option value="em andamento">Em andamento</option>
-              <option value="finalizado">Finalizado</option>
+              <option value="Não iniciado">Não iniciado</option>
+              <option value="Em andamento">Em andamento</option>
+              <option value="Finalizado">Finalizado</option>
             </select>
             <small class="dica">Defina o status inicial da ação.</small>
           </div>
@@ -1059,10 +1058,10 @@
           <select id="modalDesignadoSelect" style="padding:0.4rem 1rem;border-radius:6px;font-size:1rem;min-width:120px;"></select>
           <span style="font-size:1.1rem;font-weight:600;color:#4953b8;">Status:</span>
           <select id="modalStatusSelect" style="padding:0.4rem 1rem;border-radius:6px;font-size:1rem;">
-            <option value="não iniciado">Não iniciado</option>
-            <option value="em andamento">Em andamento</option>
+            <option value="Não iniciado">Não iniciado</option>
+            <option value="Em andamento">Em andamento</option>
             ${modoCorrigir ? '<option value="Devolvido">Devolvido</option>' : ''}
-            <option value="finalizado">Finalizado</option>
+            <option value="Finalizado">Finalizado</option>
           </select>
           <button id="modalStatusSalvar" class="modal-docs-upload-btn" style="padding:0.4rem 1.2rem;">Salvar</button>
           ${modoCorrigir ? `<button id="modalAprovar" class="modal-docs-upload-btn" style="padding:0.4rem 1.2rem;background:#28a745;">Aprovar</button>` : ''}
@@ -1139,7 +1138,7 @@
         // Se for modo de correção e status está saindo de finalizado, enviar comentário
         let comentarioEnviado = false;
         let comentario = '';
-        if (modoCorrigir && statusAtual === 'finalizado' && novoStatus !== 'finalizado') {
+        if (modoCorrigir && statusAtual === 'Finalizado' && novoStatus !== 'Finalizado') {
           comentario = document.getElementById('modalComentario').value.trim();
           if (comentario.length > 0) {
             const respComentario = await fetch(`/api/acoes/comentario/${acaoId}`, {
@@ -1183,7 +1182,7 @@
             arquivoOk = arquivoOk && respArq.ok;
           }
         }
-        if (statusOk && arquivoOk && (!modoCorrigir || novoStatus === 'finalizado' || comentarioEnviado)) {
+        if (statusOk && arquivoOk && (!modoCorrigir || novoStatus === 'Finalizado' || comentarioEnviado)) {
           msg.textContent = 'Salvo!';
           // Fechar o modal imediatamente após salvar
           document.getElementById('modalDocumentos').style.display = 'none';

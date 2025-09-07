@@ -1119,7 +1119,7 @@ app.get('/api/acoes/mine', ensureAuthCookies, async (req, res) => {
     const userId = req.user.id;
 
     const sql = `
-      SELECT a.id, a.protocolo, a.cliente, a.titulo, a.designado, a.criador, a.status,
+      SELECT a.id, a.protocolado, a.cliente, a.titulo, a.designado, a.criador, a.status,
              a.data_concluido, a.data_aprovado, a.comentario, a.arquivo_path, a.data_criacao
       FROM acoes a
       JOIN usuarios u

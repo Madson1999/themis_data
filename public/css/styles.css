@@ -14,6 +14,8 @@ body {
   background: linear-gradient(135deg, #fdfbf7 0%, #f6f2eb 100%);
   min-height: 100vh;
   color: #333;
+  width: 100%;
+  overflow-x: hidden;
 }
 
 /* --------- Barra Inicial --------- */
@@ -28,6 +30,7 @@ body {
   align-items: center;
   position: relative;
   z-index: 9998;
+  margin-bottom: 2%;
 }
 
 /* 1.2 Organização da div da Logo e Titulo */
