@@ -1,3 +1,12 @@
+/**
+ * config/database.js
+ * ----------------------------------------
+ * Camada de acesso ao MySQL.
+ * - testConnection(): testa conexão
+ * - executeQuery(sql, params): executa consultas/prepared statements
+ * - initializeDatabase(): cria/ajusta tabelas necessárias
+ */
+
 const mysql = require('mysql2/promise');
 require('dotenv').config();
 

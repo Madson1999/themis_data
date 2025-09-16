@@ -26,31 +26,37 @@ async function carregarKanban() {
         const kanbanBoard = document.getElementById('kanbanBoard');
         kanbanBoard.innerHTML = '';
 
-        // Ordenar: 'Nenhum' primeiro, depois os demais em ordem alfabética
-        const designados = Object.keys(acoesPorDesignado);
-        designados.sort((a, b) => {
+        const designados = Object.keys(acoesPorDesignado).sort((a, b) => {
             if (a === 'Nenhum') return -1;
             if (b === 'Nenhum') return 1;
             return a.localeCompare(b, 'pt-BR');
         });
+
+        let colunasRenderizadas = 0;
+
         designados.forEach(designado => {
-            const acoes = acoesPorDesignado[designado];
-            const coluna = criarColunaKanban(designado, acoes);
+            const acoes = acoesPorDesignado[designado] || [];
+            // ✅ filtra finalizados ANTES
+            const acoesFiltradas = acoes.filter(a => a.status?.toLowerCase() !== 'finalizado');
+            if (acoesFiltradas.length === 0) return; // nada a mostrar p/ esse designado
+
+            const coluna = criarColunaKanban(designado, acoesFiltradas); // já filtrado
             kanbanBoard.appendChild(coluna);
+            colunasRenderizadas++;
         });
 
-        // Se não houver ações, mostrar mensagem
-        if (Object.keys(acoesPorDesignado).length === 0) {
+        if (colunasRenderizadas === 0) {
             kanbanBoard.innerHTML = '<p style="text-align: center; color: #666; grid-column: 1 / -1;">Nenhuma ação encontrada</p>';
         }
     } catch (error) {
         console.error('Erro ao carregar kanban:', error);
-        document.getElementById('kanbanBoard').innerHTML = '<p style="text-align: center; color: #dc3545;">Erro ao carregar ações</p>';
+        document.getElementById('kanbanBoard').innerHTML =
+            '<p style="text-align: center; color: #dc3545;">Erro ao carregar ações</p>';
     }
 }
 
 // Função para criar uma coluna do kanban
-function criarColunaKanban(designado, acoes) {
+function criarColunaKanban(designado, acoesFiltradas) {
     const coluna = document.createElement('div');
     coluna.className = 'kanban-column';
 
@@ -63,7 +69,7 @@ function criarColunaKanban(designado, acoes) {
 
     const count = document.createElement('div');
     count.className = 'kanban-column-count';
-    count.textContent = acoes.length;
+    count.textContent = acoesFiltradas.length; // contagem real
 
     header.appendChild(title);
     header.appendChild(count);
@@ -71,15 +77,10 @@ function criarColunaKanban(designado, acoes) {
     const cardsContainer = document.createElement('div');
     cardsContainer.className = 'kanban-cards';
 
-    // Criar cards para cada ação
-    acoes.forEach(acao => {
-        const card = criarCardAcao(acao);
-        cardsContainer.appendChild(card);
-    });
+    acoesFiltradas.forEach(acao => cardsContainer.appendChild(criarCardAcao(acao)));
 
     coluna.appendChild(header);
     coluna.appendChild(cardsContainer);
-
     return coluna;
 }
 
@@ -126,65 +127,78 @@ async function carregarKanbanCorrigir() {
     try {
         const response = await fetch('/api/acoes?status=finalizado');
         const acoesPorDesignado = await response.json();
+
         const kanbanBoard = document.getElementById('kanbanBoardCorrigir');
         kanbanBoard.innerHTML = '';
-        // Ordenar: 'Nenhum' primeiro, depois os demais em ordem alfabética
-        const designados = Object.keys(acoesPorDesignado);
-        designados.sort((a, b) => {
+
+        const designados = Object.keys(acoesPorDesignado).sort((a, b) => {
             if (a === 'Nenhum') return -1;
             if (b === 'Nenhum') return 1;
             return a.localeCompare(b, 'pt-BR');
         });
+
+        let colunasRenderizadas = 0;
+
         designados.forEach(designado => {
-            const acoes = acoesPorDesignado[designado];
-            const coluna = criarColunaKanbanCorrigir(designado, acoes);
+            const acoes = acoesPorDesignado[designado] || [];
+            // ✅ ignora aprovadas ANTES
+            const acoesFiltradas = acoes.filter(acao => !acao.data_aprovado);
+            if (acoesFiltradas.length === 0) return;
+
+            const coluna = criarColunaKanbanCorrigir(designado, acoesFiltradas);
             kanbanBoard.appendChild(coluna);
+            colunasRenderizadas++;
         });
-        if (Object.keys(acoesPorDesignado).length === 0) {
-            kanbanBoard.innerHTML = '<p style="text-align: center; color: #666; grid-column: 1 / -1;">Nenhuma ação finalizada para corrigir</p>';
+
+        if (colunasRenderizadas === 0) {
+            kanbanBoard.innerHTML =
+                '<p style="text-align: center; color: #666; grid-column: 1 / -1;">Nenhuma ação finalizada para corrigir</p>';
         }
     } catch (error) {
-        document.getElementById('kanbanBoardCorrigir').innerHTML = '<p style="text-align: center; color: #dc3545;">Erro ao carregar ações</p>';
+        document.getElementById('kanbanBoardCorrigir').innerHTML =
+            '<p style="text-align: center; color: #dc3545;">Erro ao carregar ações</p>';
     }
 }
 
 // Coluna e card para corrigir (idêntico, mas chama modalCorrigir)
-function criarColunaKanbanCorrigir(designado, acoes) {
+function criarColunaKanbanCorrigir(designado, acoesFiltradas) {
     const coluna = document.createElement('div');
     coluna.className = 'kanban-column';
+
     const header = document.createElement('div');
     header.className = 'kanban-column-header';
+
     const title = document.createElement('div');
     title.className = 'kanban-column-title';
     title.textContent = designado;
+
     const count = document.createElement('div');
     count.className = 'kanban-column-count';
-    count.textContent = acoes.length;
+    count.textContent = acoesFiltradas.length; // contagem real
+
     header.appendChild(title);
     header.appendChild(count);
+
     const cardsContainer = document.createElement('div');
     cardsContainer.className = 'kanban-cards';
-    acoes.forEach(acao => {
+
+    acoesFiltradas.forEach(acao => {
         const card = document.createElement('div');
         card.className = 'kanban-card';
         card.onclick = () => abrirDetalhesAcaoCorrigir(acao.id);
         const statusClass = acao.status.replace(/\s+/g, '-').toLowerCase();
         const dataFormatada = new Date(acao.data_criacao).toLocaleDateString('pt-BR');
-        let aprovadoSelo = '';
-        if (acao.data_aprovado) {
-            aprovadoSelo = `<span class='kanban-aprovado-selo'>Aprovado</span>`;
-        }
         card.innerHTML = `
-          <div class="kanban-card-title">${acao.titulo}</div>
-          <div class="kanban-card-cliente">👤 ${acao.cliente}</div>
-          <div class="kanban-card-status status-${statusClass}">${acao.status} ${aprovadoSelo}</div>
-          <div class="kanban-card-meta">
-            <span class="kanban-card-criador">Por: ${acao.criador}</span>
-            <span class="kanban-card-data">${dataFormatada}</span>
-          </div>
-        `;
+      <div class="kanban-card-title">${acao.titulo}</div>
+      <div class="kanban-card-cliente">👤 ${acao.cliente}</div>
+      <div class="kanban-card-status status-${statusClass}">${acao.status}</div>
+      <div class="kanban-card-meta">
+        <span class="kanban-card-criador">Por: ${acao.criador}</span>
+        <span class="kanban-card-data">${dataFormatada}</span>
+      </div>`;
         cardsContainer.appendChild(card);
     });
+
     coluna.appendChild(header);
     coluna.appendChild(cardsContainer);
     return coluna;
@@ -282,7 +296,7 @@ function mostrarModalDocumentosAcompanhamento(acaoId, arquivosPorTipo, statusAtu
     }
 
     // Preencher lista de designados
-    fetch('/api/designados').then(r => r.json()).then(designados => {
+    fetch('/api/usuarios/designados').then(r => r.json()).then(designados => {
         const select = document.getElementById('modalDesignadoSelect');
         select.innerHTML = '<option value="Nenhum">Nenhum</option>';
         designados.forEach(e => {
@@ -498,7 +512,7 @@ async function carregarOpcoes() {
         selectCliente.appendChild(opt);
     });
     // Buscar estagiários
-    const designados = await fetch('/api/designados').then(r => r.json()).catch(() => []);
+    const designados = await fetch('/api/usuarios/designados').then(r => r.json()).catch(() => []);
     const selectdesignado = document.getElementById('designado');
     designados.forEach(e => {
         const opt = document.createElement('option');

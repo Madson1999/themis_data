@@ -1,3 +1,12 @@
+/**
+ * config/contratos.js
+ * ----------------------------------------
+ * Geração de contratos.
+ * - previewContrato(payload): gera preview (sem persistir)
+ * - gerarContrato(payload): gera .docx final e retorna caminho/nome/URL
+ * - Abstrai templates e formatação de documentos
+ */
+
 const fs = require('fs-extra');
 const path = require('path');
 const PizZip = require('pizzip');
@@ -5,7 +14,7 @@ const PizZip = require('pizzip');
 async function gerarContrato(dados) {
   try {
     const { cliente, numero_contrato = 'CON-' + new Date().toISOString().replace(/[-:]/g, '').slice(0, 14), acao } = dados;
-    const templatePath = path.join(__dirname, '../public/contratos/modelos/CONTRATO.docx');
+    const templatePath = path.join(__dirname, '../../public/contratos/modelos/CONTRATO.docx');
 
     if (!await fs.pathExists(templatePath)) {
       throw new Error('Template de contrato não encontrado.');
@@ -52,7 +61,7 @@ async function gerarContrato(dados) {
     // Pasta de destino
     const ano = new Date().getFullYear();
     const mes = String(new Date().getMonth() + 1).padStart(2, '0');
-    const pastaAno = path.join(__dirname, '../public/contratos/gerados', String(ano));
+    const pastaAno = path.join(__dirname, '../../public/contratos/gerados', String(ano));
     const pastaMes = path.join(pastaAno, mes);
     await fs.ensureDir(pastaMes);
 

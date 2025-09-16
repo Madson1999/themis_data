@@ -1,12 +1,12 @@
 # Themis Data
 
-Sistema de gerenciamento de dados com Node.js, Express e MySQL.
+Sistema de gerenciamento de processos jurídicos desenvolvido com **Node.js**, **Express** e **MySQL**.
 
 ## 🚀 Instalação
 
 1. **Clone o repositório**
 ```bash
-git clone [url-do-repositorio]
+git clone git@github.com:Madson1999/themis_data.git
 cd themis_data
 ```
 
@@ -15,34 +15,24 @@ cd themis_data
 npm install
 ```
 
-3. **Configure o banco de dados**
+3. **Configure o ambiente**
+   - Copie o arquivo `.env` de exemplo:
+     ```bash
+     cp env.example .env
+     ```
+   - Edite suas credenciais no `.env`:
+     ```env
+     DB_HOST=localhost
+     DB_USER=root
+     DB_PASSWORD=sua_senha
+     DB_NAME=themis_data
+     DB_PORT=3306
 
-   a. Crie um arquivo `.env` na raiz do projeto:
-   ```bash
-   cp env.example .env
-   ```
-
-   b. Edite o arquivo `.env` com suas configurações:
-   ```env
-   # Configurações do Banco de Dados
-   DB_HOST=localhost
-   DB_USER=root
-   DB_PASSWORD=sua_senha_aqui
-   DB_NAME=themis_data
-   DB_PORT=3306
-
-   # Configurações do Servidor
-   PORT=3000
-   NODE_ENV=development
-
-   # Configurações de Segurança
-   JWT_SECRET=sua_chave_secreta_aqui
-   SESSION_SECRET=outra_chave_secreta_aqui
-   ```
+     PORT=3000
+     NODE_ENV=development
+     ```
 
 4. **Configure o MySQL**
-   - Certifique-se de que o MySQL está instalado e rodando
-   - Crie um banco de dados chamado `themis_data`
    ```sql
    CREATE DATABASE themis_data;
    ```
@@ -52,61 +42,80 @@ npm install
 npm start
 ```
 
-## 📊 Funcionalidades
-
-- ✅ Sistema de login seguro com bcrypt
-- ✅ menu com estatísticas em tempo real
-- ✅ Logs de acesso automáticos
-- ✅ Gerenciamento de usuários
-- ✅ Interface responsiva e moderna
-
-## 🔐 Credenciais Padrão
-
-- **Email:** `admin@exemplo.com`
-- **Senha:** `123456`
-
-## 📁 Estrutura do Projeto
-
-```
-themis_data/
-├── config/
-│   └── database.js          # Configuração do banco de dados
-├── public/
-│   ├── images/              # Imagens do projeto
-│   ├── login.html           # Página de login
-│   └── menu.html       # menu principal
-├── server.js                # Servidor principal
-├── package.json             # Dependências
-├── env.example              # Exemplo de variáveis de ambiente
-└── README.md               # Este arquivo
-```
-
-## 🗄️ Tabelas do Banco de Dados
-
-O sistema cria automaticamente as seguintes tabelas:
-
-- **usuarios**: Armazena informações dos usuários
-- **logs_acesso**: Registra todos os acessos ao sistema
-- **configuracoes**: Configurações gerais do sistema
-
-## 🔧 Desenvolvimento
-
 Para desenvolvimento com auto-reload:
 ```bash
 npm run dev
 ```
 
+---
+
+## 📊 Funcionalidades
+
+- ✅ Login seguro com bcrypt + cookies de sessão  
+- ✅ Painel com estatísticas em tempo real  
+- ✅ Logs de acesso automáticos  
+- ✅ Gerenciamento de usuários e permissões (admin, advogado, estagiário)  
+- ✅ Cadastro e busca de clientes (por nome e/ou CPF/CNPJ)  
+- ✅ Criação e gerenciamento de **ações/processos** (Kanban)  
+- ✅ Upload/remoção de documentos organizados em pastas  
+- ✅ Aprovação, comentários e controle de status das ações  
+- ✅ Protocolação e geração de contratos em Word (.docx)  
+
+---
+
+## 📁 Estrutura do Projeto
+
+```
+themis_data/
+├── src/
+│   ├── app.js                  # Configuração principal do Express
+│   ├── server.js               # Entry point
+│   ├── config/                 # Configurações (DB, contratos)
+│   ├── controllers/            # Controladores (lógica HTTP)
+│   ├── services/               # Regras de negócio (DB + filesystem)
+│   ├── routes/                 # Rotas agrupadas por domínio
+│   ├── middlewares/            # Autenticação, validação, erros
+│   ├── utils/                  # Utilitários (asyncHandler, uploads, etc.)
+│   └── validators/             # Schemas de validação (ex.: Zod)
+├── public/                     # Arquivos estáticos (HTML/CSS/JS)
+├── env.example                 # Exemplo de variáveis de ambiente
+├── package.json
+└── README.md
+```
+
+---
+
+## 🗄️ Tabelas do Banco
+
+Criadas/geridas automaticamente pelo sistema:
+
+- **usuarios** → dados de login/permissões  
+- **logs_acesso** → auditoria (IP, agente, data)  
+- **cliente** → dados de clientes  
+- **acoes** → processos/ações vinculados a clientes  
+- **contratos** → registros de contratos gerados  
+
+---
+
+## 🔐 Credenciais Padrão (exemplo)
+
+- **Email:** `admin@exemplo.com`  
+- **Senha:** `123456`  
+
+---
+
+## 🛡️ Segurança
+
+- Senhas com hash via bcrypt  
+- Proteção contra SQL Injection (prepared statements)  
+- Middleware de validação (Zod/Joi/Yup)  
+- Logs de acesso e auditoria  
+
+---
+
 ## 📝 Logs
 
 O sistema registra automaticamente:
 - Logins e logouts
-- IP do usuário
-- User-Agent do navegador
-- Data e hora de acesso
-
-## 🛡️ Segurança
-
-- Senhas criptografadas com bcrypt
-- Proteção contra SQL injection
-- Validação de entrada
-- Logs de segurança 
+- IP e navegador do usuário
+- Data e hora de cada acesso  
