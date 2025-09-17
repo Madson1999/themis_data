@@ -73,8 +73,13 @@
             </div>
 
             <div class="form-group">
-              <label for="telefone">Telefone</label>
-              <input type="tel" id="telefone" name="telefone" maxlength="14" required>
+              <label for="telefone1">1º Telefone</label>
+              <input type="tel" id="telefone1" name="telefone1" maxlength="14" required>
+            </div>
+
+            <div class="form-group">
+              <label for="telefone2">2º Telefone (Opcional)</label>
+              <input type="tel" id="telefone2" name="telefone2" maxlength="14" required>
             </div>
 
             <div class="form-group">
@@ -162,34 +167,34 @@
       </div>
     </div>
 
-    
-<div id="lista" class="tab-content">
-  <div class="table-container">
-    <div class="table-header">
-      <h3>Lista de Clientes</h3>
-      <div class="search-box">
-        <input type="text" id="searchInput" placeholder="Buscar cliente...">
+
+    <div id="lista" class="tab-content">
+      <div class="table-container">
+        <div class="table-header">
+          <h3>Lista de Clientes</h3>
+          <div class="search-box">
+            <input type="text" id="searchInput" placeholder="Buscar cliente...">
+          </div>
+        </div>
+
+        <!-- ENVOLVER A TABELA NESTE WRAPPER -->
+        <div class="table-scroll">
+          <table id="clientesTable">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>CPF/CNPJ</th>
+                <th>Telefone</th>
+                <th>Opção</th>
+              </tr>
+            </thead>
+            <tbody id="clientesTableBody">
+              <!-- Dados carregados dinamicamente -->
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
-
-    <!-- ENVOLVER A TABELA NESTE WRAPPER -->
-    <div class="table-scroll">
-      <table id="clientesTable">
-        <thead>
-          <tr>
-            <th>Nome</th>
-            <th>CPF/CNPJ</th>
-            <th>Telefone</th>
-            <th>Opção</th>
-          </tr>
-        </thead>
-        <tbody id="clientesTableBody">
-          <!-- Dados carregados dinamicamente -->
-        </tbody>
-      </table>
-    </div>
-  </div>
-</div>
 
   </main>
 
@@ -218,8 +223,11 @@
         <div class="form-group"><label for="edit_rg">RG</label><input type="text" id="edit_rg" name="rg" maxlength="10"
             required></div>
 
-        <div class="form-group"><label for="edit_telefone">Telefone</label><input type="tel" id="edit_telefone"
-            name="telefone" maxlength="14" required></div>
+        <div class="form-group"><label for="edit_telefone1">1º Telefone</label><input type="tel" id="edit_telefone1"
+            name="telefone1" maxlength="14" required></div>
+
+        <div class="form-group"><label for="edit_telefone2">2º Telefone</label><input type="tel" id="edit_telefone2"
+            name="telefone2" maxlength="14" required></div>
 
         <div class="form-group"><label for="edit_email">E-mail</label><input type="email" id="edit_email" name="email">
         </div>

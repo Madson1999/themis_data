@@ -5,6 +5,7 @@
  * - Listar aprovados (com flag protocolado)
  * - Marcar “protocolado”
  * - Obter pasta da ação e ler/baixar arquivos
+ * - Devolver ação (limpar data_aprovado)
  */
 
 const path = require('path');
@@ -20,7 +21,11 @@ exports.listarAprovados = async () => {
   `, []);
 };
 
-exports.protocolar = (id) => executeQuery('UPDATE acoes SET protocolado = 1 WHERE id = ?', [id]);
+exports.protocolar = (id) =>
+    executeQuery('UPDATE acoes SET protocolado = 1 WHERE id = ?', [id]);
+
+exports.devolverAcao = (id) =>
+    executeQuery('UPDATE acoes SET data_aprovado = NULL WHERE id = ?', [id]);
 
 exports.listarArquivos = async (id) => {
     const rows = await executeQuery('SELECT arquivo_path FROM acoes WHERE id = ?', [id]);

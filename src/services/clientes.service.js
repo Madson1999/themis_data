@@ -70,7 +70,7 @@ exports.buscarParaContrato = async (qRaw = '') => {
 };
 
 exports.criar = async (payload) => {
-    const { nome, data_nasc, cpf_cnpj, rg, telefone, email, endereco, bairro, cep, uf, cidade, profissao, nacionalidade, estado_civil } = payload;
+    const { nome, data_nasc, cpf_cnpj, rg, telefone1, telefone2, email, endereco, bairro, cep, uf, cidade, profissao, nacionalidade, estado_civil } = payload;
 
     const existe = await executeQuery('SELECT id FROM cliente WHERE cpf_cnpj = ?', [cpf_cnpj]);
     if (existe.length > 0) {
@@ -78,8 +78,8 @@ exports.criar = async (payload) => {
     }
 
     const result = await executeQuery(
-        'INSERT INTO cliente (nome, data_nasc, cpf_cnpj, rg, telefone, email, endereco, bairro, cep, uf, cidade, profissao, nacionalidade, estado_civil) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [nome || null, data_nasc || null, cpf_cnpj || null, rg || null, telefone || null, email, endereco || null, bairro || null, cep || null, uf || null, cidade || null, profissao || null, nacionalidade || null, estado_civil || null]
+        'INSERT INTO cliente (nome, data_nasc, cpf_cnpj, rg, telefone1, telefone2, email, endereco, bairro, cep, uf, cidade, profissao, nacionalidade, estado_civil) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [nome || null, data_nasc || null, cpf_cnpj || null, rg || null, telefone1 || null, telefone2 || null, email, endereco || null, bairro || null, cep || null, uf || null, cidade || null, profissao || null, nacionalidade || null, estado_civil || null]
     );
 
     return { sucesso: true, mensagem: 'Cliente cadastrado com sucesso!', id: result.insertId };

@@ -1,0 +1,343 @@
+/* Título */
+.tabela>h1 {
+    text-align: center;
+    margin-bottom: 20px;
+    color: #2c3e50;
+    font-size: 28px;
+}
+
+/* ===========================
+               FILTROS 
+     =========================== */
+.filtros {
+    --c1: #667eea;
+    /* cor primária */
+    --c1d: #4953b8;
+    /* primária escura */
+    --line: #d1d5db;
+    /* bordas */
+    --ring: rgba(102, 126, 234, .35);
+
+    width: 90%;
+    margin: 1% auto 15px auto;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 12px 16px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .05);
+}
+
+.filtro-grupo {
+    display: flex;
+    flex-direction: column;
+    min-width: 180px;
+    flex: 1;
+}
+
+.filtros label {
+    font-weight: 600;
+    color: #34495e;
+    font-size: 13px;
+    margin-bottom: 4px;
+    display: block;
+}
+
+.filtros input[type="date"],
+.filtros select {
+    padding: 9px 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #f9fafb;
+    color: #111827;
+    font-size: 14px;
+    transition: border-color .2s, box-shadow .2s, background .2s;
+    outline: none;
+}
+
+.filtros input[type="date"]:hover,
+.filtros select:hover {
+    border-color: #cdd3df;
+}
+
+.filtros input[type="date"]:focus,
+.filtros select:focus {
+    border-color: var(--c1);
+    box-shadow: 0 0 0 3px var(--ring);
+    background: #fff;
+}
+
+.btn {
+    border: none;
+    border-radius: 8px;
+    padding: 10px 14px;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 14px;
+    transition: transform .05s ease, box-shadow .2s ease, background .2s ease;
+    white-space: nowrap;
+}
+
+.btn:active {
+    transform: translateY(1px);
+}
+
+.btn-filtrar {
+    background: linear-gradient(92deg, #667eea 0%, #4953b8 100%);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, .18);
+}
+
+.btn-filtrar:hover {
+    box-shadow: 0 6px 16px rgba(102, 126, 234, .22);
+}
+
+.btn-limpar {
+    background: #f1f5f9;
+    color: #1f2937;
+    border: 1px solid #e2e8f0;
+}
+
+.btn-limpar:hover {
+    background: #e2e8f0;
+}
+
+.btn-baixar {
+    background: #10b981;
+    color: #fff;
+    text-decoration: none;
+}
+
+.btn-protocolar {
+    background: #2563eb;
+    color: #fff;
+}
+
+.btn-devolver {
+    background: #e53e3e;
+    color: #fff;
+}
+
+/* Badges True/False */
+.badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.badge-ok {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.badge-no {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+/* Tabela */
+table {
+    width: 90%;
+    margin: auto;
+    border-collapse: collapse;
+    background: white;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, .05);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+/* background do titulo da coluna */
+thead {
+    background-color: #007bff;
+    color: white;
+}
+
+/* Titulo das colunas */
+thead th {
+    padding: 12px;
+    text-align: left;
+    font-size: 14px;
+}
+
+/* Conteúdo das colunas */
+tbody td {
+    padding: 10px;
+    border-bottom: 1px solid #eee;
+    font-size: 14px;
+    vertical-align: middle;
+}
+
+tbody tr:nth-child(even) {
+    background-color: #f8f9fa;
+}
+
+tbody tr:hover {
+    background-color: #e9f2ff;
+}
+
+/* Classe principal modal */
+.modal-docs {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Chamada para o modal */
+.modal-docs.show {
+    display: flex;
+}
+
+/* Background para fechar o modal, quando for clicado fora*/
+.modal-docs-bg {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, .35);
+}
+
+/* documentos modal */
+.modal-docs-content {
+    position: relative;
+    background: #fff;
+    border-radius: 10px;
+    padding: 2rem 2.5rem 1.5rem 2.5rem;
+    min-width: 320px;
+    max-width: 95vw;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, .18);
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.modal-docs-close {
+    position: absolute;
+    top: .7rem;
+    right: 1.2rem;
+    background: none;
+    border: none;
+    font-size: 2rem;
+    color: #4953b8;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.modal-docs-content h3 {
+    margin: 0 0 1.2rem 0;
+    color: #4953b8;
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+
+.modal-docs-lista {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: .7rem;
+}
+
+.modal-docs-arquivos {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    width: 100%;
+}
+
+.modal-docs-arquivo-card {
+    display: flex;
+    align-items: center;
+    background: #fff;
+    border-radius: 6px;
+    padding: .5rem .8rem;
+    font-size: .98rem;
+    color: #4953b8;
+    box-shadow: 0 1px 4px rgba(102, 126, 234, .07);
+    gap: .7rem;
+}
+
+.modal-docs-arquivo-icon {
+    font-size: 1.3rem;
+    color: #667eea;
+    margin-right: .5rem;
+}
+
+.modal-docs-arquivo-nome {
+    flex: 1;
+    word-break: break-all;
+}
+
+.modal-docs-arquivo-link {
+    color: #667eea;
+    text-decoration: underline;
+    font-weight: 500;
+    margin-left: .7rem;
+    font-size: 1.1em;
+}
+
+.modal-docs-arquivo-link:hover {
+    color: #4953b8;
+}
+
+.modal-docs-empty {
+    color: #888;
+    background: #f8f9fa;
+    border-radius: 6px;
+    padding: .8rem 1rem;
+}
+
+/* Responsivo */
+@media (max-width: 768px) {
+
+    table,
+    thead,
+    tbody,
+    th,
+    td,
+    tr {
+        display: block;
+    }
+
+    thead {
+        display: none;
+    }
+
+    tbody tr {
+        margin-bottom: 15px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        background: white;
+        padding: 10px;
+    }
+
+    tbody td {
+        border: none;
+        padding: 6px 10px;
+        display: flex;
+        justify-content: space-between;
+        font-size: 13px;
+    }
+
+    tbody td::before {
+        content: attr(data-label);
+        font-weight: bold;
+        color: #555;
+        margin-right: 10px;
+    }
+
+    .filtros {
+        width: 92%;
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .filtro-grupo {
+        min-width: 100%;
+    }
+}
