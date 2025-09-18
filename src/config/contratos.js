@@ -24,7 +24,11 @@ async function gerarContrato(dados) {
     const zip = new PizZip(content);
 
     // Preparar dados para substituição
-    const dataAtual = new Date().toLocaleDateString('pt-BR');
+    const dataAtual = new Date().toLocaleDateString('pt-BR', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
     const enderecoCompleto = `${cliente?.endereco || ''}, Bairro: ${cliente?.cidade || ''}, CEP: ${cliente?.cep || ''}, Cidade: ${cliente?.cidade} - ${cliente?.uf || ''}`;
 
     // Mapeamento de marcadores para valores
@@ -32,7 +36,7 @@ async function gerarContrato(dados) {
       '{{NOME_CLIENTE}}': (cliente?.nome || '').toUpperCase(),
       '{{CPF_CNPJ}}': cliente?.cpf_cnpj || '',
       '{{ENDERECO_COMPLETO}}': enderecoCompleto,
-      '{{TELEFONE}}': cliente?.telefone || '',
+      '{{TELEFONE}}': cliente?.telefone1 || '',
       '{{EMAIL}}': cliente?.email || '',
       '{{DATA_ATUAL}}': dataAtual,
       '{{NUMERO_CONTRATO}}': numero_contrato,
@@ -90,7 +94,11 @@ function previewContrato(dados) {
     const { cliente, acao } = dados;
 
     // Preparar dados para substituição
-    const dataAtual = new Date().toLocaleDateString('pt-BR');
+    const dataAtual = new Date().toLocaleDateString('pt-BR', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
     const enderecoCompleto = `${cliente?.endereco || ''}, Bairro: ${cliente?.cidade || ''}, CEP: ${cliente?.cep || ''}, Cidade: ${cliente?.cidade} - ${cliente?.uf || ''}`;
 
     // Mapeamento de marcadores para valores
@@ -98,7 +106,7 @@ function previewContrato(dados) {
       '{{NOME_CLIENTE}}': (cliente?.nome || '').toUpperCase(),
       '{{CPF_CNPJ}}': cliente?.cpf_cnpj || '',
       '{{ENDERECO_COMPLETO}}': enderecoCompleto,
-      '{{TELEFONE}}': cliente?.telefone || '',
+      '{{TELEFONE}}': cliente?.telefone1 || '',
       '{{EMAIL}}': cliente?.email || '',
       '{{DATA_ATUAL}}': dataAtual,
       '{{NUMERO_CONTRATO}}': 'CON-' + new Date().toISOString().replace(/[-:]/g, '').slice(0, 14),
@@ -115,7 +123,7 @@ function previewContrato(dados) {
     // Para o preview, vamos retornar um texto simples com as substituições
     // Você pode personalizar este texto conforme necessário
     let previewText = `CONTRATO DE PRESTAÇÃO DE SERVIÇOS ADVOCATÍCIOS
-CONTRATANTE: {{NOME_CLIENTE}}, {{NACIONALIDADE}}, {{ESTADO_CIVIL}}, {{PROFISSAO}}, portador(a) do RG: {{RG}} SSP/AM, CPF: {{CPF_CNPJ}}, com endereço eletrônico: {{EMAIL}}, residente e domiciliada na {{ENDERECO_COMPLETO}}.
+CONTRATANTE: {{NOME_CLIENTE}}, {{NACIONALIDADE}}, {{ESTADO_CIVIL}}, {{PROFISSAO}}, portador(a) do RG: {{RG}} SSP/AM, CPF: {{CPF_CNPJ}}, com endereço eletrônico: contato@kelsonsouzaadv.com.br, residente e domiciliada na {{ENDERECO_COMPLETO}}.
 
 CONTRATADOS: Dr. KELSON GIRÃO DE SOUZA, brasileiro, casado, advogado inscrito na OAB∕AM sob o n° 7.670 e Dra. GIULIANNE LOPES CURSINO, brasileira, casada, advogada, inscrita na OAB∕AM sob o n° 7.922, sócios do escritório jurídico KELSON SOUZA & GIULIANNE CURSINO ADVOGADOS, sociedade de advogados, inscrita na OAB/AM sob o n° 581/15, profissional na Av. Djalma Batista Shopping Millennium Business Tower, sala 1204, 12º andar nº 1661, Bairro: Chapada, CEP: 69050-010, Cidade: Manaus/AM. Pelo presente instrumento particular, as partes supra qualificadas convencionam entre si o seguinte:
 
