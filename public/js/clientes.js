@@ -80,15 +80,17 @@ async function carregarClientes() {
         clientes.forEach(cliente => {
             const row = document.createElement('tr');
             row.innerHTML = `
-    <td>${cliente.nome}</td>
-    <td>${cliente.cpf_cnpj}</td>
-    <td>${cliente.telefone1 || '-'}</td>
-    <td>
-        <div class="action-buttons">
-        <button class="btn btn-warning btn-sm" onclick="editarCliente(${cliente.id})">Editar</button>
-        </div>
-    </td>
-    `;
+            <td>${cliente.nome}</td>
+            <td>${cliente.cpf_cnpj}</td>
+            <td>${cliente.telefone1 || '-'}</td>
+            <td>
+            <div class="action-buttons">
+            <button class="btn btn-secondary btn-sm" onclick="visualizarCliente(${cliente.id})">Visualizar</button>
+            <button class="btn btn-warning btn-sm" onclick="editarCliente(${cliente.id})">Editar</button>
+            </div>
+            </td>
+        `;
+
             tbody.appendChild(row);
         });
         clientesCache = clientes;
@@ -123,15 +125,17 @@ async function buscarClientes(searchTerm = "") {
         clientes.forEach(cliente => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
-<td>${cliente.nome}</td>
-<td>${cliente.cpf_cnpj}</td>
-<td>${cliente.telefone1 || '-'}</td>
-<td>
-    <div class="action-buttons">
-    <button class="btn btn-warning btn-sm" onclick="editarCliente(${cliente.id})">Editar</button>
-    </div>
-</td>
-`;
+            <td>${cliente.nome}</td>
+            <td>${cliente.cpf_cnpj}</td>
+            <td>${cliente.telefone1 || '-'}</td>
+            <td>
+                <div class="action-buttons">
+                <button class="btn btn-secondary btn-sm" onclick="visualizarCliente(${cliente.id})">Visualizar</button>
+                <button class="btn btn-warning btn-sm" onclick="editarCliente(${cliente.id})">Editar</button>
+                </div>
+            </td>
+            `;
+
             tbody.appendChild(tr);
         });
 
@@ -172,6 +176,40 @@ function editarCliente(id) {
 function fecharModalEditar() {
     document.getElementById('modalEditarCliente').style.display = 'none';
 }
+
+function visualizarCliente(id) {
+    const cliente = clientesCache.find(c => c.id === id);
+    if (!cliente) return;
+
+    // Preenche os campos (todos só-leitura no HTML)
+    document.getElementById('view_id').value = cliente.id || '';
+    document.getElementById('view_nome').value = cliente.nome || '';
+    if (cliente.data_nasc) {
+        document.getElementById('view_data_nasc').value = (cliente.data_nasc || '').substring(0, 10);
+    } else {
+        document.getElementById('view_data_nasc').value = '';
+    }
+    document.getElementById('view_cpf_cnpj').value = cliente.cpf_cnpj || '';
+    document.getElementById('view_rg').value = cliente.rg || '';
+    document.getElementById('view_telefone1').value = cliente.telefone1 || '';
+    document.getElementById('view_telefone2').value = cliente.telefone2 || '';
+    document.getElementById('view_email').value = cliente.email || '';
+    document.getElementById('view_endereco').value = cliente.endereco || '';
+    document.getElementById('view_bairro').value = cliente.bairro || '';
+    document.getElementById('view_cep').value = cliente.cep || '';
+    document.getElementById('view_uf').value = cliente.uf || '';
+    document.getElementById('view_cidade').value = cliente.cidade || '';
+    document.getElementById('view_profissao').value = cliente.profissao || '';
+    document.getElementById('view_nacionalidade').value = cliente.nacionalidade || '';
+    document.getElementById('view_estado_civil').value = cliente.estado_civil || '';
+
+    document.getElementById('modalVisualizarCliente').style.display = 'block';
+}
+
+function fecharModalVisualizar() {
+    document.getElementById('modalVisualizarCliente').style.display = 'none';
+}
+
 
 function excluirCliente(id) {
     if (confirm('Tem certeza que deseja excluir este cliente?')) {

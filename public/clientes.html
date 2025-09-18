@@ -1,3 +1,5 @@
+<!-- ./public/clientes.html -->
+
 <!DOCTYPE html>
 <html lang="pt-br">
 
@@ -199,15 +201,10 @@
   </main>
 
   <!-- Modal de edição de cliente -->
-  <div id="modalEditarCliente" class="modal"
-    style="display:none; position:fixed; z-index:2000; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.4);">
-
-    <div class="modal-content"
-      style="background:#fff; margin:5% auto; padding:2rem; border-radius:8px; max-width:500px; max-height:80vh; overflow-y:auto; position:relative;">
-      <span class="close" onclick="fecharModalEditar()"
-        style="position:absolute; top:10px; right:20px; font-size:28px; cursor:pointer;">&times;</span>
+  <div id="modalEditarCliente" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="fecharModalEditar()">&times;</span>
       <h3>Editar Cliente</h3>
-
       <form id="formEditarCliente">
         <input type="hidden" id="edit_id" name="id">
 
@@ -264,6 +261,97 @@
       </form>
     </div>
   </div>
+
+  <!-- Modal de visualização de cliente (somente leitura) -->
+  <div id="modalVisualizarCliente" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="fecharModalVisualizar()">&times;</span>
+      <h3>Visualizar Cliente</h3>
+
+      <!-- Não é form: só campos readonly/disabled -->
+      <input type="hidden" id="view_id">
+
+      <div class="form-group">
+        <label for="view_nome">Nome Completo</label>
+        <input type="text" id="view_nome" readonly>
+      </div>
+
+      <div class="form-group">
+        <label for="view_data_nasc">Data de Nascimento</label>
+        <input type="date" id="view_data_nasc" disabled>
+      </div>
+
+      <div class="form-group">
+        <label for="view_cpf_cnpj">CPF/CNPJ</label>
+        <input type="text" id="view_cpf_cnpj" readonly>
+      </div>
+
+      <div class="form-group">
+        <label for="view_rg">RG</label>
+        <input type="text" id="view_rg" readonly>
+      </div>
+
+      <div class="form-group">
+        <label for="view_telefone1">1º Telefone</label>
+        <input type="tel" id="view_telefone1" readonly>
+      </div>
+
+      <div class="form-group">
+        <label for="view_telefone2">2º Telefone</label>
+        <input type="tel" id="view_telefone2" readonly>
+      </div>
+
+      <div class="form-group">
+        <label for="view_email">E-mail</label>
+        <input type="email" id="view_email" readonly>
+      </div>
+
+      <div class="form-group">
+        <label for="view_endereco">Endereço</label>
+        <input type="text" id="view_endereco" readonly>
+      </div>
+
+      <div class="form-group">
+        <label for="view_bairro">Bairro</label>
+        <input type="text" id="view_bairro" readonly>
+      </div>
+
+      <div class="form-group">
+        <label for="view_cep">CEP</label>
+        <input type="text" id="view_cep" readonly>
+      </div>
+
+      <div class="form-group">
+        <label for="view_uf">UF</label>
+        <input type="text" id="view_uf" readonly>
+      </div>
+
+      <div class="form-group">
+        <label for="view_cidade">Cidade</label>
+        <input type="text" id="view_cidade" readonly>
+      </div>
+
+      <div class="form-group">
+        <label for="view_profissao">Profissão</label>
+        <input type="text" id="view_profissao" readonly>
+      </div>
+
+      <div class="form-group">
+        <label for="view_nacionalidade">Nacionalidade</label>
+        <input type="text" id="view_nacionalidade" readonly>
+      </div>
+
+      <div class="form-group">
+        <label for="view_estado_civil">Estado Civil</label>
+        <input type="text" id="view_estado_civil" readonly>
+      </div>
+
+      <div style="margin-top:1.5rem; display:flex; gap:1rem; justify-content:flex-end;">
+        <button type="button" class="btn btn-secondary" onclick="fecharModalVisualizar()">Fechar</button>
+      </div>
+    </div>
+  </div>
+
 
   <script src="js/script.js"></script>
   <script src="js/clientes.js"></script>
