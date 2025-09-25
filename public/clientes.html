@@ -6,6 +6,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link rel="stylesheet" href="./css/styles.css">
   <link rel="stylesheet" href="./css/clientes.css">
   <title>Themis Data - Cadastro de Clientes</title>
@@ -161,7 +162,7 @@
 
           </div>
 
-          <div class="form-actions" style="margin-top: 0px;">
+          <div class="form-actions">
             <button type="button" class="btn btn-secondary" onclick="limparFormulario()">Limpar</button>
             <button type="submit" class="btn btn-primary">Cadastrar Cliente</button>
           </div>
@@ -252,11 +253,11 @@
         <div class="form-group"><label for="edit_estado_civil">Estado Civil</label><input type="text"
             id="edit_estado_civil" name="estado_civil" required></div>
 
-        <div style="margin-top:1.5rem; display:flex; gap:1rem; justify-content:flex-end;">
+        <div class="btn-in-editar">
+          <button type="submit" class="btn btn-primary">Salvar</button>
+          <button type="button" class="btn btn-secondary" onclick="fecharModalEditar()">Cancelar</button>
           <button type="button" class="btn btn-danger"
             onclick="excluirCliente(document.getElementById('edit_id').value)">Excluir</button>
-          <button type="button" class="btn btn-secondary" onclick="fecharModalEditar()">Cancelar</button>
-          <button type="submit" class="btn btn-primary">Salvar</button>
         </div>
       </form>
     </div>

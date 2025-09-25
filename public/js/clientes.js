@@ -85,8 +85,12 @@ async function carregarClientes() {
             <td>${cliente.telefone1 || '-'}</td>
             <td>
             <div class="action-buttons">
-            <button class="btn btn-secondary btn-sm" onclick="visualizarCliente(${cliente.id})">Visualizar</button>
-            <button class="btn btn-warning btn-sm" onclick="editarCliente(${cliente.id})">Editar</button>
+            <button class="btn btn-secondary btn-sm" onclick="visualizarCliente(${cliente.id})">
+            <i class="fa fa-eye"></i>
+            </button>
+            <button class="btn btn-warning btn-sm" onclick="editarCliente(${cliente.id})">
+            <i class="fa fa-pencil-alt"></i>
+            </button>
             </div>
             </td>
         `;

@@ -9,6 +9,13 @@
   margin-bottom: 2rem;
 }
 
+.btn-in-editar {
+  margin-top: 1.5rem;
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+}
+
 .tab-btn {
   background: rgba(255, 255, 255, 0.8);
   border: none;
@@ -172,7 +179,7 @@
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(10px);
   border-radius: 12px;
-  padding: 2rem;
+  padding: 1rem;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
   display: flex;
   flex-direction: column;
@@ -306,6 +313,7 @@ tr:hover {
             MODAL
    ========================= */
 
+/* ===== Estilo padrão (desktop) ===== */
 .modal {
   display: none;
   position: fixed;
@@ -319,7 +327,7 @@ tr:hover {
 
 .modal-content {
   background: #fff;
-  margin: 5% auto;
+  margin: 100px auto;
   padding: 2rem;
   border-radius: 8px;
   max-width: 500px;
@@ -343,36 +351,148 @@ tr:hover {
   cursor: pointer;
 }
 
+
+
+
 /* =========================
         RESPONSIVIDADE
    ========================= */
+
+/* ===== Mobile (até 767px) ===== */
 @media (max-width: 768px) {
-  .header {
-    padding: 1rem;
-    flex-direction: column;
-    gap: 1rem;
+  .modal-content {
+    margin: 15% auto;
+    width: 90%;
+    height: 80%;
+    padding: 1.2rem;
+    max-width: none;
+    /* remove limite fixo */
   }
+
+  .modal-content h3 {
+    font-size: 1.2rem;
+  }
+
+  .close {
+    font-size: 24px;
+    right: 15px;
+  }
+
+  .form-container {
+    margin-bottom: 50px;
+  }
+}
+
+/* ===== Tablet (768px até 1023px) ===== */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .modal-content {
+    margin: 8% auto;
+    width: 80%;
+    padding: 2.5rem;
+    max-width: none;
+  }
+
+  .modal-content h3 {
+    font-size: 1.3rem;
+  }
+
+  .close {
+    font-size: 26px;
+  }
+
+  .form-container {
+    margin-bottom: 50px;
+  }
+
+  .table-container {
+    max-height: 1000px;
+  }
+}
+
+@media (max-width: 768px) {
 
   .main-content {
     padding: 1rem;
   }
 
-  .form-grid {
-    grid-template-columns: 1fr;
+
+}
+
+
+/* ============================
+   Tabela de Clientes (mobile)
+   Mostrar só: Nome (col 1) e Opção (col 4)
+   ============================ */
+@media (max-width: 767px) {
+
+  /* Garante layout estável e corte com reticências */
+  table:has(#clientesTableBody) {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
   }
 
-  .search-box input {
-    width: 200px;
+  /* Esconde CPF/CNPJ (col 2) e Telefone (col 3) no mobile */
+  table:has(#clientesTableBody) thead th:nth-child(2),
+  table:has(#clientesTableBody) thead th:nth-child(3),
+  table:has(#clientesTableBody) tbody td:nth-child(2),
+  table:has(#clientesTableBody) tbody td:nth-child(3) {
+    display: none;
   }
 
-  .modal-content {
-    max-width: 98vw;
-    padding: 1rem;
+  /* Larguras e truncamento das colunas visíveis */
+  table:has(#clientesTableBody) thead th:first-child,
+  table:has(#clientesTableBody) tbody td:first-child {
+    width: 70%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    /* nome longo vira … */
   }
 
-  table,
-  th,
-  td {
-    font-size: 0.95rem;
+  table:has(#clientesTableBody) thead th:last-child,
+  table:has(#clientesTableBody) tbody td:last-child {
+    width: 30%;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  /* Na coluna Opção, manter só os dois primeiros itens (ex.: Ver/Editar) */
+  table:has(#clientesTableBody) tbody td:last-child>*:not(:nth-child(-n+2)) {
+    display: none !important;
+  }
+
+  /* Fallback: se a célula tiver um wrapper interno (ex.: <td><div>...</div></td>) */
+  table:has(#clientesTableBody) tbody td:last-child>*> :not(:nth-child(-n+2)) {
+    display: none !important;
+  }
+}
+
+/* ===== Celular (até 767px) ===== */
+@media (max-width: 767px) {
+  .btn-in-editar {
+    flex-direction: column;
+    /* empilha os botões */
+    align-items: stretch;
+    /* cada botão ocupa toda a largura */
+    gap: 0.8rem;
+  }
+
+  .btn-in-editar .btn {
+    width: 100%;
+    /* botões ficam 100% */
+    font-size: 1rem;
+    /* fonte confortável para toque */
+    padding: 12px;
+    /* aumenta área clicável */
+  }
+}
+
+/* ===== Tablet (até 1023px) ===== */
+@media (max-width: 1023px) {
+  .btn-in-editar {
+    justify-content: center;
+    /* centraliza os botões */
+    gap: 0.8rem;
   }
 }

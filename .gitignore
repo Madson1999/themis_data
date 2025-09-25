@@ -18,6 +18,7 @@ logs
 # Arquivos temporários
 *.tmp
 *.temp
+temp/
 
 # Arquivos do sistema
 .DS_Store

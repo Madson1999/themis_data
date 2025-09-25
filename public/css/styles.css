@@ -31,12 +31,17 @@ body {
   position: relative;
   z-index: 9998;
   margin-bottom: 2%;
+  padding: 2px 16px;
+  gap: 12px;
 }
 
 /* 1.2 Organização da div da Logo e Titulo */
 .logo-header {
   display: flex;
   align-items: center;
+  gap: 10px;
+  min-width: 0;
+  /* permite encolher */
 }
 
 /* 1.3 Imagem Logo */
@@ -51,6 +56,13 @@ body {
   font-size: 1.5rem;
   font-weight: 600;
   font-style: italic;
+  white-space: nowrap;
+  /* não quebrar linha */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* reticências se faltar espaço */
+  max-width: 30vw;
+  /* impede estourar */
 }
 
 /* 2.1 Classe do usuario e menu */
@@ -60,6 +72,8 @@ body {
   gap: 1rem;
   right: 1%;
   position: relative;
+  min-width: 0;
+  /* permite encolher conteúdo */
 }
 
 /* 2.2 Organização da div da imagem do usuario  */
@@ -75,6 +89,8 @@ body {
   font-weight: bold;
   overflow: hidden;
   position: relative;
+  flex: 0 0 auto;
+  /* tamanho fixo do avatar */
 }
 
 /* 2.3 Classe da imagem do usuario */
@@ -101,6 +117,21 @@ body {
   font-weight: bold;
 }
 
+/* 2.5 Nome e nível do usuário (evitar quebra/estouro) */
+.user-info>div[style*="flex-direction: column"] {
+  min-width: 0;
+}
+
+#userNome,
+#userNivelAcesso {
+  display: block;
+  max-width: 42vw;
+  /* limite elástico */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* 3.1 Classe principal do Menu */
 .menu-toggle {
   background: none;
@@ -112,6 +143,8 @@ body {
   gap: 3px;
   border-radius: 4px;
   transition: background 0.3s;
+  flex: 0 0 auto;
+  /* não encolher */
 }
 
 /* 3.2 Quando o mouse passar por cima */
@@ -196,4 +229,107 @@ body {
 .dropdown-menu .logout-option:hover {
   background: #dc3545;
   color: white;
+}
+
+/* --------- RESPONSIVIDADE --------- */
+
+/* 5.1 Mobile (até 767px) */
+@media (max-width: 767px) {
+
+  /* Header compacto e sempre em linha */
+  .header {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+
+  .logo-header img {
+    height: 50px;
+  }
+
+  .logo-header>h1 {
+    display: none;
+  }
+
+  /* ganha altura escondendo o título */
+
+  .user-avatar {
+    width: 34px;
+    height: 34px;
+  }
+
+  #userNome {
+    font-size: 0.95rem;
+  }
+
+  #userNivelAcesso {
+    font-size: 0.82rem;
+  }
+
+  .menu-toggle .bar {
+    width: 20px;
+    height: 2px;
+  }
+
+  /* Dropdown como “sheet” centralizado abaixo do header */
+  .dropdown-menu {
+    position: fixed;
+    top: 56px;
+    /* logo abaixo do header */
+    right: 12px;
+    left: 12px;
+    min-width: unset;
+    margin-top: 0;
+    transform: translateY(0);
+    /* sem animação vertical no fixo */
+  }
+}
+
+/* 5.2 Tablet (768px–1023px) */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .header {
+    padding: 10px 14px;
+    gap: 10px;
+  }
+
+  .logo-header img {
+    height: 50px;
+  }
+
+  .logo-header>h1 {
+    font-size: 1.1rem;
+    max-width: 28vw;
+  }
+
+  .user-avatar {
+    width: 38px;
+    height: 38px;
+  }
+
+  #userNome {
+    max-width: 34vw;
+  }
+
+  #userNivelAcesso {
+    font-size: 0.9rem;
+  }
+
+  /* Dropdown ancorado à direita no tablet */
+  .dropdown-menu {
+    left: auto;
+    right: 0;
+    min-width: 220px;
+    margin-top: 0.4rem;
+  }
+}
+
+/* 5.3 Desktop grande (≥1440px) */
+@media (min-width: 1440px) {
+  .logo-header>h1 {
+    font-size: 1.6rem;
+    max-width: 32vw;
+  }
+
+  .dropdown-menu {
+    min-width: 240px;
+  }
 }
