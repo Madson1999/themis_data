@@ -3,11 +3,13 @@ function mostrarAba(aba) {
     document.getElementById('aba-criar').style.display = aba === 'criar' ? 'block' : 'none';
     document.getElementById('aba-acompanhar').style.display = aba === 'acompanhar' ? 'block' : 'none';
     document.getElementById('aba-corrigir').style.display = aba === 'corrigir' ? 'block' : 'none';
+
     // Opcional: destaque visual no botão ativo
     document.querySelectorAll('.aba-btn').forEach(btn => btn.classList.remove('ativo'));
     if (aba === 'criar') document.querySelectorAll('.aba-btn')[0].classList.add('ativo');
     if (aba === 'acompanhar') document.querySelectorAll('.aba-btn')[1].classList.add('ativo');
     if (aba === 'corrigir') document.querySelectorAll('.aba-btn')[2].classList.add('ativo');
+
     // Carregar kanban quando a aba for aberta
     if (aba === 'acompanhar') {
         carregarKanban();
@@ -36,6 +38,7 @@ async function carregarKanban() {
 
         designados.forEach(designado => {
             const acoes = acoesPorDesignado[designado] || [];
+
             // ✅ filtra finalizados ANTES
             const acoesFiltradas = acoes.filter(a => a.status?.toLowerCase() !== 'finalizado');
             if (acoesFiltradas.length === 0) return; // nada a mostrar p/ esse designado
@@ -96,7 +99,9 @@ function criarCardAcao(acao) {
     card.innerHTML = `
         <div class="kanban-card-title">${acao.titulo}</div>
         <div class="kanban-card-cliente">👤 ${acao.cliente}</div>
-        <div class="kanban-card-status status-${statusClass}">${acao.status}</div>
+        <div class="kanban-card-status status-${statusClass}">
+        ${acao.status} - Nível ${({ baixa: 'Baixo', media: 'Médio', alta: 'Alto' }[acao.complexidade])}
+        </div>
         <div class="kanban-card-meta">
           <span class="kanban-card-criador">Por: ${acao.criador}</span>
           <span class="kanban-card-data">${dataFormatada}</span>
@@ -116,7 +121,7 @@ async function abrirDetalhesAcao(acaoId) {
         // Buscar status
         const respStatus = await fetch(`/api/acoes/status/${acaoId}`);
         const dadosStatus = await respStatus.json();
-        mostrarModalDocumentosAcompanhamento(acaoId, arquivosPorTipo, dadosStatus.status);
+        mostrarModalDocumentosAcompanhamento(acaoId, arquivosPorTipo, dadosStatus.status, false, dadosStatus.complexidade);
     } catch (e) {
         alert('Erro ao buscar arquivos ou status da ação.');
     }
@@ -191,7 +196,7 @@ function criarColunaKanbanCorrigir(designado, acoesFiltradas) {
         card.innerHTML = `
       <div class="kanban-card-title">${acao.titulo}</div>
       <div class="kanban-card-cliente">👤 ${acao.cliente}</div>
-      <div class="kanban-card-status status-${statusClass}">${acao.status}</div>
+      <div class="kanban-card-status status-${statusClass}">${acao.status} - Nível ${acao.complexidade}</div>
       <div class="kanban-card-meta">
         <span class="kanban-card-criador">Por: ${acao.criador}</span>
         <span class="kanban-card-data">${dataFormatada}</span>
@@ -214,16 +219,17 @@ async function abrirDetalhesAcaoCorrigir(acaoId) {
         // Buscar status
         const respStatus = await fetch(`/api/acoes/status/${acaoId}`);
         const dadosStatus = await respStatus.json();
-        mostrarModalDocumentosAcompanhamento(acaoId, arquivosPorTipo, dadosStatus.status, true);
+        mostrarModalDocumentosAcompanhamento(acaoId, arquivosPorTipo, dadosStatus.status, true, dadosStatus.complexidade);
     } catch (e) {
         alert('Erro ao buscar arquivos ou status da ação.');
     }
 }
 
-function mostrarModalDocumentosAcompanhamento(acaoId, arquivosPorTipo, statusAtual, modoCorrigir) {
+function mostrarModalDocumentosAcompanhamento(acaoId, arquivosPorTipo, statusAtual, modoCorrigir, complexidadeAtual) {
     const modal = document.getElementById('modalDocumentos');
     const lista = document.getElementById('modalDocsLista');
     lista.innerHTML = '';
+
     // Campo de status editável na mesma linha do título do modal
     const modalContent = document.querySelector('.modal-docs-content');
     let headerRow = document.getElementById('modalDocsHeaderRow');
@@ -237,9 +243,18 @@ function mostrarModalDocumentosAcompanhamento(acaoId, arquivosPorTipo, statusAtu
     headerRow.style.marginBottom = '1.2rem';
     headerRow.innerHTML = `
         <h3 style='margin:0;color:#4953b8;font-size:1.25rem;font-weight:600;'>Documentos da Ação</h3>
+
         <div style='display:flex;align-items:center;gap:1rem;'>
           <span style="font-size:1.1rem;font-weight:600;color:#4953b8;">Designado:</span>
           <select id="modalDesignadoSelect" style="padding:0.4rem 1rem;border-radius:6px;font-size:1rem;min-width:120px;"></select>
+
+          <span style="font-size:1.1rem;font-weight:600;color:#4953b8;">Complexidade:</span>
+          <select id="modalComplexidadeSelect" style="padding:0.4rem 1rem;border-radius:6px;font-size:1rem;">
+            <option value="baixa">Baixa</option>
+            <option value="media">Média</option>
+            <option value="alta">Alta</option>
+          </select>
+
           <span style="font-size:1.1rem;font-weight:600;color:#4953b8;">Status:</span>
           <select id="modalStatusSelect" style="padding:0.4rem 1rem;border-radius:6px;font-size:1rem;">
             <option value="Não iniciado">Não iniciado</option>
@@ -247,8 +262,10 @@ function mostrarModalDocumentosAcompanhamento(acaoId, arquivosPorTipo, statusAtu
             ${modoCorrigir ? '<option value="Devolvido">Devolvido</option>' : ''}
             <option value="Finalizado">Finalizado</option>
           </select>
+
           <button id="modalStatusSalvar" class="modal-docs-upload-btn" style="padding:0.4rem 1.2rem;">Salvar</button>
           ${modoCorrigir ? `<button id="modalAprovar" class="modal-docs-upload-btn" style="padding:0.4rem 1.2rem;background:#28a745;">Aprovar</button>` : ''}
+
           <span id="modalStatusMsg" style="margin-left:0.7rem;font-size:0.98rem;"></span>
         </div>
       `;
@@ -309,13 +326,18 @@ function mostrarModalDocumentosAcompanhamento(acaoId, arquivosPorTipo, statusAtu
         select.value = window.__modalDesignadoAtual || 'Nenhum';
     });
     // Setar valor atual do status
-    setTimeout(() => {
+    + setTimeout(() => {
         document.getElementById('modalStatusSelect').value = statusAtual;
+        const selComp = document.getElementById('modalComplexidadeSelect');
+        if (selComp) {
+            selComp.value = complexidadeAtual;
+        }
     }, 50);
     // Salvar status/designado/arquivo
     document.getElementById('modalStatusSalvar').onclick = async () => {
         const novoStatus = document.getElementById('modalStatusSelect').value;
         const novoDesignado = document.getElementById('modalDesignadoSelect').value;
+        const novaComplexidade = document.getElementById('modalComplexidadeSelect').value;
         const msg = document.getElementById('modalStatusMsg');
         msg.textContent = 'Salvando...';
         let statusOk = false;
@@ -340,7 +362,7 @@ function mostrarModalDocumentosAcompanhamento(acaoId, arquivosPorTipo, statusAtu
         const resp = await fetch(`/api/acoes/status/${acaoId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: novoStatus, designado: novoDesignado })
+            body: JSON.stringify({ status: novoStatus, designado: novoDesignado, complexidade: novaComplexidade })
         });
         if (resp.ok) {
             statusOk = true;
@@ -349,6 +371,9 @@ function mostrarModalDocumentosAcompanhamento(acaoId, arquivosPorTipo, statusAtu
         let arquivoOk = true;
         const tiposUpload = [
             { campo: 'modalContratoUpload', rota: '/api/acoes/upload-contrato' },
+            { campo: 'modalProcuracaoUpload', rota: '/api/acoes/upload-procuracao' },
+            { campo: 'modalDeclaracaoUpload', rota: '/api/acoes/upload-declaracao' },
+            { campo: 'modalFichaUpload', rota: '/api/acoes/upload-ficha' },
             { campo: 'modalDocumentacaoUpload', rota: '/api/acoes/upload-documentacao' },
             { campo: 'modalProvasUpload', rota: '/api/acoes/upload-provas' },
             { campo: 'modalAcaoUpload', rota: '/api/acoes/upload-acao' }
@@ -402,6 +427,9 @@ function mostrarModalDocumentosAcompanhamento(acaoId, arquivosPorTipo, statusAtu
     window.__modalDesignadoAtual = arquivosPorTipo && arquivosPorTipo.__designadoAtual ? arquivosPorTipo.__designadoAtual : 'Nenhum';
     const tipos = {
         'Contrato': arquivosPorTipo.Contrato || [],
+        'Procuracao': arquivosPorTipo.Procuracao || [],
+        'Declaracao': arquivosPorTipo.Declaracao || [],
+        'Ficha': arquivosPorTipo.Ficha || [],
         'Documentação': arquivosPorTipo.Documentacao || [],
         'Provas': arquivosPorTipo.Provas || [],
         'Ação': arquivosPorTipo.Acao || []
@@ -417,9 +445,12 @@ function mostrarModalDocumentosAcompanhamento(acaoId, arquivosPorTipo, statusAtu
         if (listaArqs.length === 0) {
             const tipoCampo =
                 titulo === 'Contrato' ? 'modalContratoUpload' :
-                    titulo === 'Documentação' ? 'modalDocumentacaoUpload' :
-                        titulo === 'Provas' ? 'modalProvasUpload' :
-                            titulo === 'Ação' ? 'modalAcaoUpload' : '';
+                    titulo === 'Procuracao' ? 'modalProcuracaoUpload' :
+                        titulo === 'Declaracao' ? 'modalDeclaracaoUpload' :
+                            titulo === 'Ficha' ? 'modalFichaUpload' :
+                                titulo === 'Documentação' ? 'modalDocumentacaoUpload' :
+                                    titulo === 'Provas' ? 'modalProvasUpload' :
+                                        titulo === 'Ação' ? 'modalAcaoUpload' : '';
             const uploadDrop = document.createElement('div');
             uploadDrop.className = 'modal-docs-upload-drop';
             uploadDrop.innerHTML = `
@@ -465,12 +496,14 @@ function mostrarModalDocumentosAcompanhamento(acaoId, arquivosPorTipo, statusAtu
             listaArqs.forEach(arq => {
                 const card = document.createElement('div');
                 card.className = 'modal-docs-arquivo-card';
+                const nomeBase = (arq.nome || '').replace(/^(CON|DEC|PRO|FIC|DOC|PROV|ACAO)\s*-\s*/, '');
+                const nomeCurto = nomeBase.length > 18 ? nomeBase.slice(0, 18) + '…' : nomeBase;
                 card.innerHTML = `
-              <span class='modal-docs-arquivo-icon'>📄</span>
-              <span class='modal-docs-arquivo-nome'>${arq.nome.replace(/^(CON|DOC|PROV|ACAO) - /, '')}</span>
-              <a class='modal-docs-arquivo-link' href="${arq.path.replace(/^.*public/, '')}" target="_blank" title="Baixar">⬇️</a>
-              <button class='modal-docs-arquivo-remove' title='Excluir' style='margin-left:0.7rem;color:#e53e3e;background:none;border:none;font-size:1.2em;cursor:pointer;font-weight:bold;'>×</button>
-            `;
+                <span class="modal-docs-arquivo-icon">📄</span>
+                <span class="modal-docs-arquivo-nome" title="${arq.nome}">${nomeCurto}</span>
+                <a class="modal-docs-arquivo-link" href="${(arq.path || '').replace(/^.*public/, '')}" target="_blank" title="Baixar ${arq.nome}">⬇️</a>
+                <button class="modal-docs-arquivo-remove" title="Excluir" style="margin-left:0.7rem;color:#e53e3e;background:none;border:none;font-size:1.2em;cursor:pointer;font-weight:bold;">×</button>
+                `;
                 // Evento de remover
                 card.querySelector('.modal-docs-arquivo-remove').onclick = async (ev) => {
                     ev.stopPropagation();
@@ -481,9 +514,12 @@ function mostrarModalDocumentosAcompanhamento(acaoId, arquivosPorTipo, statusAtu
                         body: JSON.stringify({ acaoId: acaoId, nomeArquivo: arq.nome })
                     });
                     if (resp.ok) {
-                        abrirDetalhesAcaoCorrigir(acaoId);
-                    } else {
-                        alert('Erro ao remover arquivo!');
+                        // reabre no mesmo modo em que o modal foi aberto
+                        if (modoCorrigir) {
+                            abrirDetalhesAcaoCorrigir(acaoId);
+                        } else {
+                            abrirDetalhesAcao(acaoId);
+                        }
                     }
                 };
                 arqsDiv.appendChild(card);
@@ -533,17 +569,30 @@ document.getElementById('formAcao').addEventListener('submit', async function (e
     // Dados básicos
     formData.append('cliente_id', document.getElementById('cliente').value);
     formData.append('designado_id', document.getElementById('designado').value);
-    formData.append('status', document.getElementById('status').value);
+    formData.append('status', 'Não iniciado');
+    formData.append('complexidade', document.getElementById('complexidade').value)
     formData.append('titulo', document.getElementById('titulo').value);
 
     // Arquivos
     const contratoFiles = document.getElementById('contratoArquivo').files;
+    const procuracaoFiles = document.getElementById('procuracaoArquivo').files;
+    const declaracaoFiles = document.getElementById('declaracaoArquivo').files;
+    const fichaFiles = document.getElementById('fichaArquivo').files;
     const documentacaoFiles = document.getElementById('documentacaoArquivo').files;
     const provasFiles = document.getElementById('provasArquivo').files;
 
     // Adicionar arquivos com campos separados para cada tipo
     for (let i = 0; i < contratoFiles.length; i++) {
         formData.append('contratoArquivo', contratoFiles[i]);
+    }
+    for (let i = 0; i < procuracaoFiles.length; i++) {
+        formData.append('procuracaoArquivo', procuracaoFiles[i]);
+    }
+    for (let i = 0; i < declaracaoFiles.length; i++) {
+        formData.append('declaracaoArquivo', declaracaoFiles[i]);
+    }
+    for (let i = 0; i < fichaFiles.length; i++) {
+        formData.append('fichaArquivo', fichaFiles[i]);
     }
     for (let i = 0; i < documentacaoFiles.length; i++) {
         formData.append('documentacaoArquivo', documentacaoFiles[i]);
@@ -563,6 +612,9 @@ document.getElementById('formAcao').addEventListener('submit', async function (e
         this.reset();
         // Limpar listas de arquivos
         document.getElementById('contratoArquivoLista').innerHTML = '';
+        document.getElementById('procuracaoArquivoLista').innerHTML = '';
+        document.getElementById('declaracaoArquivoLista').innerHTML = '';
+        document.getElementById('fichaArquivoLista').innerHTML = '';
         document.getElementById('documentacaoArquivoLista').innerHTML = '';
         document.getElementById('provasArquivoLista').innerHTML = '';
         // Exibir pop-up de sucesso
@@ -617,6 +669,15 @@ function removerArquivo(inputId, idx) {
 document.getElementById('contratoArquivo').addEventListener('change', function () {
     atualizarListaArquivos('contratoArquivo', 'contratoArquivoLista');
 });
+document.getElementById('procuracaoArquivo').addEventListener('change', function () {
+    atualizarListaArquivos('procuracaoArquivo', 'procuracaoArquivoLista');
+});
+document.getElementById('declaracaoArquivo').addEventListener('change', function () {
+    atualizarListaArquivos('declaracaoArquivo', 'declaracaoArquivoLista');
+});
+document.getElementById('fichaArquivo').addEventListener('change', function () {
+    atualizarListaArquivos('fichaArquivo', 'fichaArquivoLista');
+});
 document.getElementById('documentacaoArquivo').addEventListener('change', function () {
     atualizarListaArquivos('documentacaoArquivo', 'documentacaoArquivoLista');
 });
@@ -625,10 +686,9 @@ document.getElementById('provasArquivo').addEventListener('change', function () 
 });
 
 // Drag and drop para cada campo
-function setupDrop(dropId, inputId, labelId) {
+function setupDrop(dropId, inputId) {
     const drop = document.getElementById(dropId);
     const input = document.getElementById(inputId);
-    const label = document.getElementById(labelId);
     drop.addEventListener('dragover', function (e) {
         e.preventDefault();
         drop.classList.add('dragover');
@@ -649,9 +709,12 @@ function setupDrop(dropId, inputId, labelId) {
         }
     });
 }
-setupDrop('drop-contrato', 'contratoArquivo', 'contratoArquivoLabel');
-setupDrop('drop-documentacao', 'documentacaoArquivo', 'documentacaoArquivoLabel');
-setupDrop('drop-provas', 'provasArquivo', 'provasArquivoLabel');
+setupDrop('drop-contrato', 'contratoArquivo');
+setupDrop('drop-procuracao', 'procuracaoArquivo');
+setupDrop('drop-declaracao', 'declaracaoArquivo');
+setupDrop('drop-ficha', 'fichaArquivo');
+setupDrop('drop-documentacao', 'documentacaoArquivo');
+setupDrop('drop-provas', 'provasArquivo');
 
 
 // Função para mostrar notificação toast no canto inferior esquerdo

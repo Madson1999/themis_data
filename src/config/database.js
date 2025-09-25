@@ -140,6 +140,7 @@ async function initializeDatabase() {
     protocolado BOOLEAN,
     cliente_id INT,
     titulo VARCHAR(60),
+    complexidade VARCHAR(6),
     designado_id INT,
     criador_id INT,
     status VARCHAR(20),

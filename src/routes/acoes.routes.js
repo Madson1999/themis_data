@@ -24,13 +24,16 @@ const router = Router();
 // LISTAGEM/CRUD BÁSICO
 router.get('/', c.listar); // ?status=
 router.post('/',
-    upload.fields([{ name: 'contratoArquivo' }, { name: 'documentacaoArquivo' }, { name: 'provasArquivo' }]),
+    upload.fields([{ name: 'contratoArquivo' }, { name: 'procuracaoArquivo' }, { name: 'declaracaoArquivo' }, { name: 'fichaArquivo' }, { name: 'documentacaoArquivo' }, { name: 'provasArquivo' }]),
     c.criar
 );
 
 // UPLOADS ADICIONAIS (mantendo rotas antigas)
 router.post('/upload-acao', upload.single('arquivo'), c.uploadAcao);
 router.post('/upload-contrato', upload.single('arquivo'), c.uploadContrato);
+router.post('/upload-procuracao', upload.single('arquivo'), c.uploadProcuracao);
+router.post('/upload-declaracao', upload.single('arquivo'), c.uploadDeclaracao);
+router.post('/upload-ficha', upload.single('arquivo'), c.uploadFicha);
 router.post('/upload-documentacao', upload.single('arquivo'), c.uploadDocumentacao);
 router.post('/upload-provas', upload.single('arquivo'), c.uploadProvas);
 

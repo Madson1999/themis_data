@@ -22,16 +22,29 @@ const asyncHandler = require('../utils/asyncHandler');
 
 // POST /api/acoes  (criar ação + uploads iniciais)
 exports.criar = asyncHandler(async (req, res) => {
-    const { cliente_id, designado_id, titulo, status } = req.body;
+    const { cliente_id, designado_id, titulo } = req.body;
+
+    // status vira opcional: se não vier, "Não iniciado"
+    const status = (req.body.status && String(req.body.status).trim()) || 'Não iniciado';
+
+    // complexidade é obrigatória e vem do select do form
+    const complexidade = (req.body.complexidade && String(req.body.complexidade));
+
     const criador_id = req.cookies?.usuario_id || null;
 
-    if (!cliente_id || !titulo || !status) {
-        return res.status(400).json({ sucesso: false, mensagem: 'Dados obrigatórios não fornecidos' });
+    if (!cliente_id || !titulo || !complexidade) {
+        return res.status(400).json({
+            sucesso: false,
+            mensagem: 'cliente_id, titulo e complexidade são obrigatórios'
+        });
     }
 
-    // Junta todos os arquivos vindos dos 3 campos (iguais aos do server.js)
+    // arquivos iniciais (multer.fields nas rotas)
     const arquivos = [
         ...(req.files?.contratoArquivo || []),
+        ...(req.files?.procuracaoArquivo || []),
+        ...(req.files?.declaracaoArquivo || []),
+        ...(req.files?.fichaArquivo || []),
         ...(req.files?.documentacaoArquivo || []),
         ...(req.files?.provasArquivo || []),
     ];
@@ -43,16 +56,17 @@ exports.criar = asyncHandler(async (req, res) => {
         status,
         criador_id,
         arquivos,
+        complexidade,
     });
 
     res.json({
         sucesso: true,
         mensagem: 'Ação criada com sucesso!',
         id: result.id,
-        // devolvendo a mesma estrutura que você retornava
         arquivos,
     });
 });
+
 
 // Uploads adicionais (um por rota, mantendo as rotas antigas)
 exports.uploadAcao = asyncHandler(async (req, res) => {
@@ -70,6 +84,33 @@ exports.uploadContrato = asyncHandler(async (req, res) => {
         return res.status(400).json({ sucesso: false, mensagem: 'Dados obrigatórios não fornecidos' });
     }
     await service.uploadArquivo({ acao_id, arquivo: req.file, prefixo: 'CON' });
+    res.json({ sucesso: true, mensagem: 'Arquivo salvo com sucesso!' });
+});
+
+exports.uploadProcuracao = asyncHandler(async (req, res) => {
+    const { acao_id } = req.body;
+    if (!acao_id || !req.file) {
+        return res.status(400).json({ sucesso: false, mensagem: 'Dados obrigatórios não fornecidos' });
+    }
+    await service.uploadArquivo({ acao_id, arquivo: req.file, prefixo: 'PRO' });
+    res.json({ sucesso: true, mensagem: 'Arquivo salvo com sucesso!' });
+});
+
+exports.uploadDeclaracao = asyncHandler(async (req, res) => {
+    const { acao_id } = req.body;
+    if (!acao_id || !req.file) {
+        return res.status(400).json({ sucesso: false, mensagem: 'Dados obrigatórios não fornecidos' });
+    }
+    await service.uploadArquivo({ acao_id, arquivo: req.file, prefixo: 'DEC' });
+    res.json({ sucesso: true, mensagem: 'Arquivo salvo com sucesso!' });
+});
+
+exports.uploadFicha = asyncHandler(async (req, res) => {
+    const { acao_id } = req.body;
+    if (!acao_id || !req.file) {
+        return res.status(400).json({ sucesso: false, mensagem: 'Dados obrigatórios não fornecidos' });
+    }
+    await service.uploadArquivo({ acao_id, arquivo: req.file, prefixo: 'FIC' });
     res.json({ sucesso: true, mensagem: 'Arquivo salvo com sucesso!' });
 });
 
@@ -119,15 +160,22 @@ exports.aprovar = asyncHandler(async (req, res) => {
 
 // GET /api/acoes/status/:id
 exports.getStatus = asyncHandler(async (req, res) => {
-    const st = await service.getStatus(req.params.id);
-    if (st == null) return res.status(404).json({ erro: 'Ação não encontrada' });
-    res.json({ status: st });
+    const dados = await service.getStatus(req.params.id);
+    if (!dados) return res.status(404).json({ erro: 'Ação não encontrada' });
+    // dados = { status, complexidade, designado }
+    res.json(dados);
 });
 
 // PUT /api/acoes/status/:id
 exports.updateStatus = asyncHandler(async (req, res) => {
-    const { status, designado } = req.body;
-    await service.updateStatus(req.params.id, { status, designado });
+    const { status, designado, complexidade } = req.body;
+
+    await service.updateStatus(req.params.id, {
+        status,
+        designado,
+        complexidade
+    });
+
     res.json({ sucesso: true });
 });
 

@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="/css/styles.css">
   <link rel="stylesheet" href="/css/acoes.css">
-  <title>Themis Data - menu</title>
+  <title>Themis Data - Designar Ações</title>
 
 </head>
 
@@ -70,13 +70,13 @@
           </div>
 
           <div class="form-group">
-            <label for="status">Status <span class="req">*</span></label>
-            <select id="status" name="status" required>
-              <option value="Não iniciado">Não iniciado</option>
-              <option value="Em andamento">Em andamento</option>
-              <option value="Finalizado">Finalizado</option>
+            <label for="complexidade">Complexidade <span class="req">*</span></label>
+            <select id="complexidade" name="complexidade" required>
+              <option value="baixa">Baixa</option>
+              <option value="media">Média</option>
+              <option value="alta">Alta</option>
             </select>
-            <small class="dica">Defina o status inicial da ação.</small>
+            <small class="dica">Defina o complexidade inicial da ação.</small>
           </div>
 
           <div class="form-group">
@@ -90,6 +90,7 @@
 
         <div class="file-upload-row">
 
+          <!--CONTRATO-->
           <div class="form-group">
             <label for="contratoArquivo">Contrato</label>
             <div class="file-drop" id="drop-contrato" onclick="document.getElementById('contratoArquivo').click();">
@@ -100,9 +101,52 @@
                 multiple style="display:none;">
               <div class="file-list" id="contratoArquivoLista"></div>
             </div>
-            <small class="dica">Anexe o contrato relacionado à ação.</small>
+            <small class="dica">Anexe o contrato relacionado à ação, se houver.</small>
           </div>
 
+          <!--UPLOAD PROCURAÇÃO-->
+          <div class="form-group">
+            <label for="procuracaoArquivo">Procuração</label>
+            <div class="file-drop" id="drop-procuracao" onclick="document.getElementById('procuracaoArquivo').click();">
+              <span class="icon">📎</span>
+              <span id="procuracaoArquivoLabel">Arraste o arquivo aqui ou clique para selecionar</span>
+              <span class="file-name" id="procuracaoArquivoNome"></span>
+              <input type="file" id="procuracaoArquivo" name="procuracaoArquivo"
+                accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" multiple style="display:none;">
+              <div class="file-list" id="procuracaoArquivoLista"></div>
+            </div>
+            <small class="dica">Anexe arquivos de procuração, se houver.</small>
+          </div>
+
+          <!--DECLARAÇÃO DE HIPOSSUFICIÊNCIA-->
+          <div class="form-group">
+            <label for="declaracaoArquivo">Declaração</label>
+            <div class="file-drop" id="drop-declaracao" onclick="document.getElementById('declaracaoArquivo').click();">
+              <span class="icon">📎</span>
+              <span id="declaracaoArquivoLabel">Arraste o arquivo aqui ou clique para selecionar</span>
+              <span class="file-name" id="declaracaoArquivoNome"></span>
+              <input type="file" id="declaracaoArquivo" name="declaracaoArquivo"
+                accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" multiple style="display:none;">
+              <div class="file-list" id="declaracaoArquivoLista"></div>
+            </div>
+            <small class="dica">Anexe arquivos de declaração, se houver.</small>
+          </div>
+
+          <!--FICHA TÉCNICA-->
+          <div class="form-group">
+            <label for="fichaArquivo">Ficha Técnica</label>
+            <div class="file-drop" id="drop-ficha" onclick="document.getElementById('fichaArquivo').click();">
+              <span class="icon">📎</span>
+              <span id="fichaArquivoLabel">Arraste o arquivo aqui ou clique para selecionar</span>
+              <span class="file-name" id="fichaArquivoNome"></span>
+              <input type="file" id="fichaArquivo" name="fichaArquivo" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" multiple
+                style="display:none;">
+              <div class="file-list" id="fichaArquivoLista"></div>
+            </div>
+            <small class="dica">Anexe arquivos de ficha técnica, se houver.</small>
+          </div>
+
+          <!--DOCUMENTAÇÃO DO CLIENTE-->
           <div class="form-group">
             <label for="documentacaoArquivo">Documentação</label>
             <div class="file-drop" id="drop-documentacao"
@@ -114,9 +158,10 @@
                 accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" multiple style="display:none;">
               <div class="file-list" id="documentacaoArquivoLista"></div>
             </div>
-            <small class="dica">Anexe documentação complementar.</small>
+            <small class="dica">Anexe documentos do cliente, se houver.</small>
           </div>
 
+          <!--PROVAS DO PROCESSO-->
           <div class="form-group">
             <label for="provasArquivo">Provas</label>
             <div class="file-drop" id="drop-provas" onclick="document.getElementById('provasArquivo').click();">
