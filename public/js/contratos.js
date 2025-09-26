@@ -1,25 +1,6 @@
 let clientes = [];
 let dadosClienteSelecionado = null;
 
-// Funções de navegação
-function showTab(tabName) {
-  // Esconder todas as abas
-  document.querySelectorAll('.tab-content').forEach(tab => {
-    tab.classList.remove('active');
-  });
-  document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.classList.remove('active');
-  });
-
-  // Mostrar aba selecionada
-  document.getElementById(tabName).classList.add('active');
-  event.target.classList.add('active');
-
-  // Carregar dados se for a aba de histórico
-  if (tabName === 'historico') {
-    carregarContratos();
-  }
-}
 
 // Carregar clientes
 async function carregarClientes() {
@@ -48,64 +29,6 @@ function carregarDadosCliente() {
     console.log('Cliente selecionado:', dadosClienteSelecionado);
   } else {
     dadosClienteSelecionado = null;
-  }
-}
-
-// Preview do contrato
-async function previewContrato() {
-  const form = document.getElementById('contratoForm');
-  const formData = new FormData(form);
-
-  const dados = {
-    cliente_id: formData.get('cliente_id'),
-    acao: formData.get('acao')
-  };
-
-  if (!dados.cliente_id) {
-    alert('Por favor, selecione um cliente.');
-    return;
-  }
-
-  try {
-    const response = await fetch('/api/contratos/preview', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(dados)
-    });
-
-    const resultado = await response.json();
-
-    if (resultado.sucesso) {
-      // Criar modal para mostrar o preview
-      const modal = document.createElement('div');
-      modal.className = 'modal';
-      modal.innerHTML = `
-            <div class="modal-content">
-              <div class="modal-header">
-                <h3>Preview do Contrato</h3>
-                <span class="close" onclick="this.parentElement.parentElement.parentElement.remove()">&times;</span>
-              </div>
-              <div class="modal-body">
-                <div style="white-space: pre-wrap; font-family: 'Times New Roman', serif; line-height: 1.6; padding: 20px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 5px; max-height: 400px; overflow-y: auto;">
-                  ${resultado.preview}
-                </div>
-              </div>
-              <div class="modal-footer">
-                <button onclick="this.parentElement.parentElement.parentElement.remove()" class="btn btn-secondary">Fechar</button>
-              </div>
-            </div>
-          `;
-
-      document.body.appendChild(modal);
-
-    } else {
-      alert('Erro ao gerar preview: ' + resultado.mensagem);
-    }
-  } catch (error) {
-    console.error('Erro:', error);
-    alert('Erro ao gerar preview. Verifique a conexão com o servidor.');
   }
 }
 
@@ -150,74 +73,7 @@ async function gerarContrato() {
   }
 }
 
-// Carregar histórico de contratos
-async function carregarContratos() {
-  try {
-    const response = await fetch('/api/contratos');
-    const contratos = await response.json();
 
-    const tbody = document.getElementById('contratosTableBody');
-    tbody.innerHTML = '';
-
-    contratos.forEach(contrato => {
-      const row = document.createElement('tr');
-      row.innerHTML = `
-            <td>${contrato.contrato}</td>
-            <td>${contrato.cliente_nome}</td>
-            <td>${contrato.acao}</td>
-            <td>${new Date(contrato.data_geracao).toLocaleDateString()}</td>
-              <div class="action-buttons">
-                <button class="btn btn-info btn-sm" onclick="downloadContrato(${contrato.id})">Download</button>
-              </div>
-            </td>
-          `;
-      tbody.appendChild(row);
-    });
-  } catch (error) {
-    console.error('Erro ao carregar contratos:', error);
-  }
-}
-
-async function downloadContrato(id) {
-  try {
-    // Fazer download do arquivo
-    const response = await fetch(`/api/contratos/${id}/download`);
-
-    if (!response.ok) {
-      const error = await response.json();
-      alert('Erro ao fazer download: ' + error.mensagem);
-      return;
-    }
-
-    // Criar blob e fazer download
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `contrato-${id}.docx`;
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
-
-  } catch (error) {
-    console.error('Erro ao fazer download:', error);
-    alert('Erro ao fazer download do contrato. Verifique a conexão com o servidor.');
-  }
-}
-
-// Inicialização
-document.addEventListener('DOMContentLoaded', function () {
-  console.log('Página de contratos carregada!');
-  carregarClientes();
-});
-
-// ======== Utils ========
-const debounce = (fn, ms = 300) => {
-  let t;
-  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
-};
-const onlyDigits = s => (s || '').replace(/\D+/g, '');
 
 // ======== Autocomplete Cliente ========
 const buscaEl = document.getElementById('clienteBusca');
@@ -265,6 +121,12 @@ function escolherCliente(c) {
   idEl.value = c.id;               // isso é o que o backend precisa
   listEl.hidden = true;
 }
+
+// ======== Utils ========
+const debounce = (fn, ms = 300) => {
+  let t;
+  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+};
 
 const consultarClientes = debounce(async (term) => {
   idEl.value = '';                 // limpa seleção ao digitar novamente
@@ -318,11 +180,6 @@ function validarClienteSelecionado() {
 }
 
 // Intercepta os botões já existentes
-const oldPreview = window.previewContrato;
-window.previewContrato = function () {
-  if (!validarClienteSelecionado()) return;
-  oldPreview();
-}
 const oldGerar = window.gerarContrato;
 window.gerarContrato = function () {
   if (!validarClienteSelecionado()) return;

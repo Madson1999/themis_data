@@ -4,6 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link rel="stylesheet" href="/css/styles.css">
   <link rel="stylesheet" href="/css/contratos.css">
   <title>Themis Data - Geração de Contratos</title>
@@ -41,12 +42,7 @@
   </header>
 
   <main class="main-content">
-    <div class="content-tabs">
-      <button class="tab-btn active" onclick="showTab('gerar')">Gerar Contrato</button>
-      <button class="tab-btn" onclick="showTab('historico')">Histórico</button>
-    </div>
-
-    <div id="gerar" class="tab-content active">
+    <div id="gerar" class="tab-content">
       <div class="form-container">
         <form id="contratoForm">
           <div class="form-grid">
@@ -61,9 +57,20 @@
                 <ul class="suggestions" id="clienteSugestoes" hidden></ul>
               </div>
 
+              <div class="form-group" style="margin-top: 1rem;">
+                <label for="requerido">Requerido</label>
+                <input type="text" id="requerido" name="requerido" class="input-form" required
+                  placeholder="Requerido da Ação">
+              </div>
 
               <div class="form-group" style="margin-top: 1rem;">
-                <label for="acao">Ação</label>
+                <label for="tipoAcao">Tipo da Ação</label>
+                <input type="text" id="tipoAcao" name="tipoAcao" class="input-form" required
+                  placeholder="Descreva o tipo da ação">
+              </div>
+
+              <div class="form-group" style="margin-top: 1rem;">
+                <label for="acao">Objeto da Ação</label>
                 <input type="text" id="acao" name="acao" class="input-form" required
                   placeholder="Descreva brevemente a ação">
               </div>
@@ -72,39 +79,13 @@
           </div>
 
           <div class="form-actions">
-            <button type="button" onclick="previewContrato()" class="btn btn-info">
-              <i class="fas fa-eye"></i> Visualizar
-            </button>
-            <button type="button" onclick="gerarContrato()" class="btn btn-primary">
+            <button type="button" onclick="gerarContrato()" class="btn">
               <i class="fas fa-file-word"></i> Gerar Contrato
             </button>
           </div>
         </form>
       </div>
     </div>
-
-    <div id="historico" class="tab-content">
-      <div class="table-container">
-        <div class="table-header">
-          <h3>Histórico de Contratos</h3>
-        </div>
-        <div class="table-scroll">
-          <table id="contratosTable">
-            <thead>
-              <tr>
-                <th>Número</th>
-                <th>Cliente</th>
-                <th>Ação</th>
-                <th>Data Geração</th>
-                <th>Download</th>
-              </tr>
-            </thead>
-            <tbody id="contratosTableBody">
-              <!-- dados -->
-            </tbody>
-          </table>
-        </div>
-      </div>
 
   </main>
 

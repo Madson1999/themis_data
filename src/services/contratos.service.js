@@ -12,13 +12,6 @@ const fs = require('fs-extra');
 const { executeQuery } = require('../config/database');
 const { gerarContrato, previewContrato } = require('../config/contratos');
 
-exports.preview = async (cliente_id, acao) => {
-    const clientes = await executeQuery('SELECT * FROM cliente WHERE id = ?', [cliente_id]);
-    if (!clientes.length) return { status: 404, body: { sucesso: false, mensagem: 'Cliente não encontrado' } };
-    const cliente = clientes[0];
-    return previewContrato({ cliente, acao });
-};
-
 exports.gerar = async (cliente_id, acao) => {
     const clientes = await executeQuery('SELECT * FROM cliente WHERE id = ?', [cliente_id]);
     if (!clientes.length) return { status: 404, body: { sucesso: false, mensagem: 'Cliente não encontrado' } };
