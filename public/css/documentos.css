@@ -55,7 +55,6 @@
 .form-actions {
   display: flex;
   gap: 1rem;
-  margin-top: 2rem;
   justify-content: flex-end;
 }
 
@@ -166,4 +165,55 @@
     max-width: 98vw;
     padding: 1rem;
   }
+
+  .form-actions {
+    margin-top: 1rem;
+  }
+}
+
+
+/* Card translúcido que engloba todos os campos */
+.form-card {
+  background: rgba(102, 126, 234, 0.05);
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 3px 10px rgba(102, 126, 234, 0.08);
+  margin-bottom: 1.5rem;
+}
+
+/* Grid responsivo: lado a lado quando cabe, empilha no mobile */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  /* 2 colunas */
+  gap: 1.25rem 1.5rem;
+}
+
+.form-group label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: .4rem;
+}
+
+/* Selo “opcional” */
+.form-group.optional .opt {
+  font-size: .85rem;
+  font-weight: 500;
+  color: #6b7280;
+}
+
+/* Mobile: 1 coluna */
+@media (max-width: 768px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+#docs-resultado a {
+  text-decoration: underline;
+}
+
+#docs-resultado ul {
+  list-style: disc;
 }

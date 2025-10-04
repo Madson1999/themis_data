@@ -4,7 +4,7 @@
  * Service que contém toda a lógica de banco e filesystem relacionada às ações (processos).
  * Funcionalidades:
  * - Criar uma ação (monta pastas, salva arquivos iniciais e insere no banco)
- * - Upload de arquivos adicionais (contrato, documentação, provas, ação)
+ * - Upload de arquivos adicionais (contrato, procuração, declaração, ficha, documentação, provas, ação)
  * - Remoção de arquivos associados a uma ação
  * - Listagem de ações (com filtro por status)
  * - Aprovação de ações (define data_aprovado)

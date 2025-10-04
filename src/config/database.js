@@ -61,6 +61,22 @@ async function executeUpdate(sql, params = []) {
 // Função para inicializar o banco de dados (criar tabelas se não existirem)
 async function initializeDatabase() {
   try {
+
+    // Tenants de Contratantes
+    const createTenants = `
+      CREATE TABLE IF NOT EXISTS tenants (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        nome_empresa VARCHAR(150) NOT NULL,
+        cnpj VARCHAR(20) UNIQUE,
+        email_admin VARCHAR(150) NOT NULL,
+        plano ENUM('basic', 'plus', 'ultra') DEFAULT 'basic',
+        licenca_ativa BOOLEAN DEFAULT TRUE,
+        data_inicio TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        data_fim TIMESTAMP NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    `;
+
     // Tabela de usuários
     const createUsersTable = `
       CREATE TABLE IF NOT EXISTS usuarios (
@@ -116,13 +132,13 @@ async function initializeDatabase() {
       )
     `;
 
-    // Tabela de contratos
-    const createContratosTable = `
-      CREATE TABLE IF NOT EXISTS contratos (
+    // Tabela de documentos
+    const createDocumentosTable = `
+      CREATE TABLE IF NOT EXISTS documentos (
         id INT AUTO_INCREMENT PRIMARY KEY,
         numero VARCHAR(50) NOT NULL,
         cliente_id INT NOT NULL,
-        tipo_contrato VARCHAR(100),
+        tipo_documento VARCHAR(100),
         valor DECIMAL(10,2),
         data_inicio DATE,
         data_fim DATE,
@@ -153,12 +169,13 @@ async function initializeDatabase() {
   `;
 
 
+    await executeQuery(createTenants);
     await executeQuery(createAcoes);
     await executeQuery(createUsersTable);
     await executeQuery(createLogsTable);
     await executeQuery(createConfigTable);
     await executeQuery(createClientesTable);
-    await executeQuery(createContratosTable);
+    await executeQuery(createDocumentosTable);
 
     // Inserir usuário admin padrão se não existir
     const checkAdmin = await executeQuery('SELECT id FROM usuarios WHERE email = ?', ['admin@exemplo.com']);

@@ -1,13 +1,13 @@
-# Modelos de Contratos
+# Modelos de Documentos
 
-Esta pasta contém os modelos base para geração de contratos.
+Esta pasta contém os modelos base para geração de documentos.
 
-## 📄 Tipos de Contratos:
+## 📄 Tipos de documentos:
 
-- Contratos de prestação de serviços
-- Contratos de venda
-- Contratos de locação
-- Contratos personalizados
+- documentos de prestação de serviços
+- documentos de venda
+- documentos de locação
+- documentos personalizados
 
 ## 🔧 Como usar:
 
@@ -35,8 +35,8 @@ Esta pasta contém os modelos base para geração de contratos.
 - `{{TELEFONE}}` - Telefone do cliente
 - `{{EMAIL}}` - E-mail do cliente
 
-### Informações do Contrato:
-- `{{NUMERO_CONTRATO}}` - Número único do contrato
+### Informações do Documento:
+- `{{NUMERO_DOCUMENTO}}` - Número único do documento
 - `{{DATA_ATUAL}}` - Data atual formatada (dd/mm/aaaa)
 
 ## 📝 Exemplo de Uso no Word:
@@ -46,7 +46,7 @@ CONTRATANTE: {{NOME_CLIENTE}}, {{NACIONALIDADE}}, {{ESTADO_CIVIL}}, {{PROFISSAO}
 portadora do RG: {{RG}}, CPF: {{CPF_CNPJ}}, com endereço eletrônico: {{EMAIL}}, 
 residente e domiciliada na {{ENDERECO_COMPLETO}}.
 
-Contrato Nº: {{NUMERO_CONTRATO}}
+Documento Nº: {{NUMERO_DOCUMENTO}}
 Data: {{DATA_ATUAL}}
 ```
 

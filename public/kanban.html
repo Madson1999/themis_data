@@ -680,11 +680,14 @@
         const res = await fetch(`/api/acoes/arquivos/${actionId}`, { credentials: 'same-origin' });
         if (!res.ok) throw new Error('Falha ao listar arquivos');
 
-        // Esperado: {Contrato:[], Documentacao:[], Provas:[], Acao:[]}
+        // Esperado: {Contrato:[], Procuracao:[], Declaracao:[], Ficha:[], Documentacao:[], Provas:[], Acao:[]}
         const grupos = await res.json();
         const flat = []
           .concat(
             (grupos.Contrato || []).map(x => ({ nome: x.nome, tipo: 'Contrato' })),
+            (grupos.Procuracao || []).map(x => ({ nome: x.nome, tipo: 'Procuracao' })),
+            (grupos.Declaracao || []).map(x => ({ nome: x.nome, tipo: 'Declaracao' })),
+            (grupos.Ficha || []).map(x => ({ nome: x.nome, tipo: 'Ficha' })),
             (grupos.Documentacao || []).map(x => ({ nome: x.nome, tipo: 'Documentacao' })),
             (grupos.Provas || []).map(x => ({ nome: x.nome, tipo: 'Provas' })),
             (grupos.Acao || []).map(x => ({ nome: x.nome, tipo: 'Acao' })),

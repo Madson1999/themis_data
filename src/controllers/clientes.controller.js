@@ -14,8 +14,8 @@ exports.listar = asyncHandler(async (req, res) => {
     res.json(data);
 });
 
-exports.buscarParaContrato = asyncHandler(async (req, res) => {
-    const data = await service.buscarParaContrato(req.query.q);
+exports.buscarParaDocumento = asyncHandler(async (req, res) => {
+    const data = await service.buscarParaDocumento(req.query.q);
     res.json(data);
 });
 

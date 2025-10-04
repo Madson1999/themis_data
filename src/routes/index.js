@@ -2,7 +2,7 @@
  * routes/index.js
  * ----------------------------------------
  * Agregador das rotas da API.
- * - Conecta sub-rotas: /auth, /clientes, /usuarios, /acoes, /contratos, /protocolacao, /stats
+ * - Conecta sub-rotas: /auth, /clientes, /usuarios, /acoes, /documentos, /protocolacao, /stats
  */
 
 const { Router } = require('express');
@@ -11,7 +11,7 @@ const auth = require('./auth.routes');
 const clientes = require('./clientes.routes');
 const usuarios = require('./usuarios.routes');
 const acoes = require('./acoes.routes');
-const contratos = require('./contratos.routes');
+const documentos = require('./documentos.routes');
 const protocolacao = require('./protocolacao.routes');
 const stats = require('./stats.routes');
 
@@ -21,7 +21,7 @@ router.use('/auth', auth);
 router.use('/clientes', clientes);
 router.use('/usuarios', usuarios);
 router.use('/acoes', acoes);
-router.use('/contratos', contratos);
+router.use('/documentos', documentos);
 router.use('/protocolacao', protocolacao);
 router.use('/stats', stats);
 

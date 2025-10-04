@@ -59,7 +59,7 @@ npm run dev
 - ✅ Criação e gerenciamento de **ações/processos** (Kanban)  
 - ✅ Upload/remoção de documentos organizados em pastas  
 - ✅ Aprovação, comentários e controle de status das ações  
-- ✅ Protocolação e geração de contratos em Word (.docx)  
+- ✅ Protocolação e geração de documentos em Word (.docx)  
 
 ---
 
@@ -70,7 +70,7 @@ themis_data/
 ├── src/
 │   ├── app.js                  # Configuração principal do Express
 │   ├── server.js               # Entry point
-│   ├── config/                 # Configurações (DB, contratos)
+│   ├── config/                 # Configurações (DB, documentos)
 │   ├── controllers/            # Controladores (lógica HTTP)
 │   ├── services/               # Regras de negócio (DB + filesystem)
 │   ├── routes/                 # Rotas agrupadas por domínio
@@ -93,7 +93,7 @@ Criadas/geridas automaticamente pelo sistema:
 - **logs_acesso** → auditoria (IP, agente, data)  
 - **cliente** → dados de clientes  
 - **acoes** → processos/ações vinculados a clientes  
-- **contratos** → registros de contratos gerados  
+- **documentos** → registros de documentos gerados  
 
 ---
 

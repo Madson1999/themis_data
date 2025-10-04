@@ -3,7 +3,7 @@
  * ----------------------------------------
  * Regras e consultas de clientes (MySQL).
  * - Listagem/busca por nome (com normalização) e CPF/CNPJ (somente dígitos)
- * - Busca leve para contratos (autocomplete)
+ * - Busca leve para documentos (autocomplete)
  * - CRUD completo (verifica duplicidades de CPF/CNPJ)
  */
 
@@ -44,7 +44,7 @@ exports.listar = async (searchTermRaw = '') => {
     return executeQuery(sql, params);
 };
 
-exports.buscarParaContrato = async (qRaw = '') => {
+exports.buscarParaDocumento = async (qRaw = '') => {
     const q = qRaw.trim();
     if (!q) return [];
     const qLike = `%${q}%`;

@@ -36,7 +36,7 @@ build/
 
 # Arquivos de upload (opcional - remova se quiser versionar)
 public/uploads/
-public/contratos/gerados/
+public/documentos/gerados/
 
 # Arquivos de lock (opcional)
 package-lock.json 

@@ -1,28 +1,28 @@
-# Pasta de Contratos
+# Pasta de Documentos
 
-Esta pasta é destinada para armazenar arquivos de contratos e documentos relacionados.
+Esta pasta é destinada para armazenar arquivos de documentos e documentos relacionados.
 
 ## 📁 Estrutura da Pasta
 
 ```
-contratos/
-├── modelos/           # Modelos de contratos base
-├── gerados/           # Contratos gerados pelo sistema
+documentos/
+├── modelos/           # Modelos de documentos base
+├── gerados/           # documentos gerados pelo sistema
 └── README.md         # Este arquivo
 ```
 
 ## 📄 Como usar:
 
 1. **Coloque seu arquivo Word** na pasta `arquivos/`
-2. **Nomeie o arquivo** de forma descritiva (ex: `contrato-padrao.docx`)
-3. **O sistema irá usar** este arquivo como base para gerar contratos personalizados
+2. **Nomeie o arquivo** de forma descritiva (ex: `documento-padrao.docx`)
+3. **O sistema irá usar** este arquivo como base para gerar documentos personalizados
 
 ## 🔧 Funcionalidades Futuras:
 
-- ✅ Geração automática de contratos
+- ✅ Geração automática de documentos
 - ✅ Preenchimento de dados do cliente
-- ✅ Download de contratos em PDF
-- ✅ Histórico de contratos gerados
+- ✅ Download de documentos em PDF
+- ✅ Histórico de documentos gerados
 - ✅ Assinatura digital
 
 ## 📋 Campos que serão preenchidos automaticamente:
@@ -31,12 +31,12 @@ contratos/
 - CPF/CNPJ
 - Endereço completo
 - Data de geração
-- Número do contrato
+- Número do documento
 - Valores e condições específicas
 
 ## 🎯 Próximos Passos:
 
 1. Adicione seu arquivo Word nesta pasta
 2. Identifique os campos que devem ser preenchidos automaticamente
-3. Criaremos a página de geração de contratos
+3. Criaremos a página de geração de documentos
 4. Implementaremos a funcionalidade de preenchimento automático 

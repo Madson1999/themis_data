@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="stylesheet" href="/css/documentos.css">
+  <title>Themis Data - Geração de Documentos</title>
+</head>
+
+<body>
+  <header class="header">
+    <div class="logo-header" onclick="window.location.href='/menu'" style="cursor:pointer;">
+      <img src="/images/logo.png" alt="Themis Data Logo">
+      <h1>Themis Data</h1>
+    </div>
+    <div class="user-info">
+      <div class="user-avatar">
+        <img id="userAvatar" alt="Avatar do usuário"
+          onerror="this.style.display='none'; document.querySelector('.fallback').style.display='flex';">
+        <div class="fallback" id="userAvatarFallback">?</div>
+      </div>
+      <div style="display: flex; flex-direction: column; align-items: flex-start;">
+        <span id="userNome"></span>
+        <span id="userNivelAcesso" style="font-size:0.95em; color:#667eea; font-weight:500;"></span>
+      </div>
+      <button class="menu-toggle" onclick="toggleMenu()">
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+      </button>
+      <div class="dropdown-menu" id="dropdownMenu">
+        <a href="/usuarios">👥 Editar Usuários</a>
+        <a href="#" onclick="alterarSenha()">🔒 Alterar Senha</a>
+        <a href="#" onclick="configuracoes()">⚙️ Configurações</a>
+        <a href="#" onclick="ajuda()">❓ Ajuda</a>
+        <a href="/" class="logout-option">🚪 Sair</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-content">
+    <div id="gerar" class="tab-content">
+      <form id="documentoForm">
+        <div class="form-card">
+          <div class="form-grid">
+
+            <!-- Campo: Buscar cliente -->
+            <div class="form-group">
+              <label for="clienteBusca">Buscar cliente</label>
+              <div class="autocomplete" id="cliente-autocomplete">
+                <input type="text" id="clienteBusca" class="input-form" placeholder="Digite nome ou CPF/CNPJ"
+                  autocomplete="off">
+                <input type="hidden" id="cliente_id" name="cliente_id" required>
+                <ul class="suggestions" id="clienteSugestoes" hidden></ul>
+              </div>
+            </div>
+
+            <!-- Campo: Requerido -->
+            <div class="form-group">
+              <label for="requerido">Requerido</label>
+              <input type="text" id="requerido" name="requerido" class="input-form" required
+                placeholder="Requerido da Ação">
+            </div>
+
+            <!-- Campo: Tipo da Ação -->
+            <div class="form-group">
+              <label for="tipo_acao">Tipo da Ação</label>
+              <input type="text" id="tipo_acao" name="tipo_acao" class="input-form" required
+                placeholder="Descreva o tipo da ação">
+            </div>
+
+            <!-- Campo: Objeto da Ação -->
+            <div class="form-group">
+              <label for="objeto_acao">Objeto da Ação</label>
+              <input type="text" id="objeto_acao" name="objeto_acao" class="input-form" required
+                placeholder="Descreva brevemente a ação">
+            </div>
+
+            <!-- Campo: Atendido por -->
+            <div class="form-group optional">
+              <label for="atendidoPor">Atendido por <span class="opt">(Ficha de Atendimento)</span></label>
+              <input type="text" id="atendidoPor" name="atendido_por" class="input-form"
+                placeholder="Nome do colaborador">
+            </div>
+
+            <!-- Campo: Data do atendimento -->
+            <div class="form-group optional">
+              <label for="data_atendimento">Data do atendimento <span class="opt">(Ficha de Atendimento)</span></label>
+              <input type="date" id="data_atendimento" name="data_atendimento" class="input-form">
+            </div>
+
+            <!-- Campo: Indicador -->
+            <div class="form-group optional">
+              <label for="indicador">Indicador <span class="opt">(Ficha de Atendimento)</span></label>
+              <input type="text" id="indicador" name="indicador" class="input-form"
+                placeholder="Quem indicou (funcionário)">
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" onclick="gerarDocumentos()" class="btn">
+              <i class="fas fa-file-word"></i> Gerar Documentos
+            </button>
+          </div>
+
+        </div>
+      </form>
+
+      <div id="docs-resultado" style="margin-top:1rem; margin-bottom: 2rem;"></div>
+
+    </div>
+
+  </main>
+
+  <script src="/js/script.js"></script>
+  <script src="/js/documentos.js"></script>
+
+</body>
+
+</html>

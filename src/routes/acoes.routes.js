@@ -4,7 +4,7 @@
  * Rotas de ações (processos) e Kanban.
  * - GET  /api/acoes?status=       → lista agrupando por designado
  * - POST /api/acoes               → cria ação (uploads iniciais)
- * - POST /api/acoes/upload-acao|upload-contrato|upload-documentacao|upload-provas
+ * - POST /api/acoes/upload-acao|upload-documento|upload-documentacao|upload-provas
  * - POST /api/acoes/remover-arquivo
  * - POST /api/acoes/aprovar/:id
  * - GET  /api/acoes/status/:id    | PUT /api/acoes/status/:id
