@@ -24,6 +24,7 @@ router.use('/acoes', acoes);
 router.use('/documentos', documentos);
 router.use('/protocolacao', protocolacao);
 router.use('/stats', stats);
+router.use(require('./admin.routes'));
 
 // compat: manter o endpoint original do usuário logado
 router.get('/usuario-logado', require('../controllers/auth.controller').usuarioLogado);

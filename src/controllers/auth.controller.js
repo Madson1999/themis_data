@@ -43,6 +43,7 @@ exports.login = asyncHandler(async (req, res) => {
     res.cookie('usuario_email', user.email, { path: '/' });
     res.cookie('usuario_nivel', user.nivel_acesso, { path: '/' });
     res.cookie('usuario_id', user.id, { path: '/' });
+    res.cookie('tenant_id', user.tenant_id, { path: '/' });
 
     // 5) Resposta
     res.json({

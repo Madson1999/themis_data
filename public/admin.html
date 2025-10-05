@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Painel do Administrador</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <style>
+        body {
+            background: #0f172a;
+            color: #e2e8f0;
+            margin: 0;
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 18px;
+            background: #111827;
+            position: sticky;
+            top: 0;
+        }
+
+        header h1 {
+            font-size: 18px;
+            margin: 0;
+        }
+
+        header button {
+            background: #ef4444;
+            border: 0;
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+
+        .wrap {
+            max-width: 1100px;
+            margin: 20px auto;
+            padding: 0 16px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .card {
+            background: #111827;
+            border: 1px solid #1f2937;
+            border-radius: 14px;
+            padding: 16px;
+        }
+
+        input,
+        select {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: 1px solid #374151;
+            background: #0b1220;
+            color: #e5e7eb;
+            margin-top: 6px;
+        }
+
+        label {
+            font-size: 13px;
+            color: #94a3b8;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        th,
+        td {
+            border-bottom: 1px solid #1f2937;
+            padding: 10px;
+            text-align: left;
+            font-size: 14px;
+        }
+
+        .actions button {
+            margin-right: 6px;
+            border: 0;
+            border-radius: 8px;
+            padding: 6px 10px;
+            cursor: pointer;
+        }
+
+        .ok {
+            background: #16a34a;
+            color: #fff;
+        }
+
+        .warn {
+            background: #f59e0b;
+            color: #111;
+        }
+
+        .danger {
+            background: #ef4444;
+            color: #fff;
+        }
+
+        .info {
+            background: #2563eb;
+            color: #fff;
+        }
+
+        .pwdbox {
+            margin-top: 8px;
+            padding: 10px;
+            border: 1px dashed #334155;
+            border-radius: 10px;
+            background: #0b1220;
+            font-family: monospace;
+            word-break: break-all;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>Administração de Licenças (tenants)</h1>
+        <button id="logout">Sair</button>
+    </header>
+
+    <div class="wrap">
+        <div class="grid">
+            <div class="card">
+                <h3>Novo cliente (tenant)</h3>
+                <label>Nome da empresa</label>
+                <input id="nome_empresa" placeholder="Ex.: Escritório Silva & Lima" />
+                <label>CNPJ</label>
+                <input id="cnpj" placeholder="Opcional" />
+                <label>E-mail do admin</label>
+                <input id="email_admin" placeholder="contato@empresa.com.br" />
+                <label>Plano</label>
+                <select id="plano">
+                    <option value="basic">basic</option>
+                    <option value="plus">plus</option>
+                    <option value="ultra">ultra</option>
+                </select>
+                <button class="ok" id="criar" style="margin-top:10px;">Criar</button>
+                <div id="msg" style="margin-top:6px; font-size:13px;"></div>
+            </div>
+
+            <div class="card">
+                <h3>Editar selecionado</h3>
+                <label>ID</label>
+                <input id="eid" disabled />
+                <label>Nome da empresa</label>
+                <input id="enome" />
+                <label>CNPJ</label>
+                <input id="ecnpj" />
+                <label>E-mail admin</label>
+                <input id="eemail" />
+                <label>Plano</label>
+                <select id="eplano">
+                    <option value="basic">basic</option>
+                    <option value="plus">plus</option>
+                    <option value="ultra">ultra</option>
+                </select>
+                <label>Licença ativa</label>
+                <select id="elicense">
+                    <option value="true">true</option>
+                    <option value="false">false</option>
+                </select>
+                <button class="warn" id="salvar" style="margin-top:10px;">Salvar alterações</button>
+            </div>
+        </div>
+
+        <!-- CARTÃO: Conta admin do cliente -->
+        <div class="card" style="margin-top:16px;">
+            <h3>Conta admin do cliente</h3>
+            <p style="margin:6px 0 10px; color:#94a3b8;">Use estes botões para gerar a primeira senha ou redefinir a
+                senha do usuário administrador do cliente (email = <code>email_admin</code> do tenant). A senha será
+                exibida <b>apenas aqui</b> e salva como hash no banco.</p>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                <button class="info" id="gerarPrimeira">Gerar primeira senha</button>
+                <button class="danger" id="resetarSenha">Redefinir senha</button>
+            </div>
+            <div id="pwdWrap" class="pwdbox" style="display:none;"></div>
+            <div id="pwdMsg" style="margin-top:6px; font-size:13px;"></div>
+        </div>
+
+        <div class="card" style="margin-top:16px;">
+            <h3>Clientes</h3>
+            <table id="tab">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Empresa</th>
+                        <th>CNPJ</th>
+                        <th>E-mail</th>
+                        <th>Plano</th>
+                        <th>Ativo</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        async function api(path, opts = {}) {
+            const r = await fetch(path, { headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', ...opts });
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        }
+
+        const tbody = document.querySelector('#tab tbody');
+        const msg = document.getElementById('msg');
+        const pwdWrap = document.getElementById('pwdWrap');
+        const pwdMsg = document.getElementById('pwdMsg');
+
+        const inputs = {
+            nome_empresa: document.getElementById('nome_empresa'),
+            cnpj: document.getElementById('cnpj'),
+            email_admin: document.getElementById('email_admin'),
+            plano: document.getElementById('plano'),
+
+            eid: document.getElementById('eid'),
+            enome: document.getElementById('enome'),
+            ecnpj: document.getElementById('ecnpj'),
+            eemail: document.getElementById('eemail'),
+            eplano: document.getElementById('eplano'),
+            elicense: document.getElementById('elicense'),
+        };
+
+        function showPwd(p) {
+            if (!p) { pwdWrap.style.display = 'none'; pwdWrap.textContent = ''; return; }
+            pwdWrap.style.display = 'block';
+            pwdWrap.textContent = p + '   ';
+            const btn = document.createElement('button');
+            btn.textContent = 'Copiar';
+            btn.style.marginLeft = '8px';
+            btn.onclick = () => navigator.clipboard.writeText(p);
+            btn.className = 'info';
+            btn.style.padding = '6px 10px'; btn.style.border = '0'; btn.style.borderRadius = '8px';
+            pwdWrap.appendChild(btn);
+        }
+
+        async function load() {
+            const data = await api('/api/admin/tenants');
+            tbody.innerHTML = '';
+            data.data.forEach(t => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+          <td>${t.id}</td>
+          <td>${t.nome_empresa}</td>
+          <td>${t.cnpj || '-'}</td>
+          <td>${t.email_admin}</td>
+          <td>${t.plano}</td>
+          <td>${t.licenca_ativa ? '✅' : '❌'}</td>
+          <td class="actions">
+            <button class="warn" data-acao="editar" data-id="${t.id}">Editar</button>
+            <button class="danger" data-acao="desativar" data-id="${t.id}">Desativar</button>
+          </td>
+        `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        document.getElementById('criar').addEventListener('click', async () => {
+            pwdMsg.textContent = ''; showPwd('');
+            msg.textContent = '...';
+            try {
+                const body = {
+                    nome_empresa: inputs.nome_empresa.value.trim(),
+                    cnpj: inputs.cnpj.value.trim(),
+                    email_admin: inputs.email_admin.value.trim(),
+                    plano: inputs.plano.value
+                };
+                const r = await api('/api/admin/tenants', { method: 'POST', body: JSON.stringify(body) });
+                msg.textContent = 'Criado: ID ' + r.data.id;
+                inputs.nome_empresa.value = ''; inputs.cnpj.value = ''; inputs.email_admin.value = '';
+                await load();
+            } catch (e) {
+                msg.textContent = 'Erro ao criar';
+            }
+        });
+
+        tbody.addEventListener('click', async (e) => {
+            const btn = e.target.closest('button'); if (!btn) return;
+            const id = btn.dataset.id;
+            const acao = btn.dataset.acao;
+            if (acao === 'editar') {
+                const r = await api('/api/admin/tenants/' + id);
+                const t = r.data;
+                inputs.eid.value = t.id;
+                inputs.enome.value = t.nome_empresa;
+                inputs.ecnpj.value = t.cnpj || '';
+                inputs.eemail.value = t.email_admin;
+                inputs.eplano.value = t.plano;
+                inputs.elicense.value = t.licenca_ativa ? 'true' : 'false';
+                pwdMsg.textContent = ''; showPwd('');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            } else if (acao === 'desativar') {
+                if (confirm('Desativar licença deste cliente?')) {
+                    await api('/api/admin/tenants/' + id, { method: 'DELETE' });
+                    await load();
+                }
+            }
+        });
+
+        document.getElementById('salvar').addEventListener('click', async () => {
+            const id = inputs.eid.value;
+            if (!id) return;
+            const body = {
+                nome_empresa: inputs.enome.value.trim(),
+                cnpj: inputs.ecnpj.value.trim() || null,
+                email_admin: inputs.eemail.value.trim(),
+                plano: inputs.eplano.value,
+                licenca_ativa: inputs.elicense.value === 'true'
+            };
+            await api('/api/admin/tenants/' + id, { method: 'PATCH', body: JSON.stringify(body) });
+            await load();
+            alert('Alterações salvas!');
+        });
+
+        document.getElementById('gerarPrimeira').addEventListener('click', async () => {
+            const id = inputs.eid.value;
+            if (!id) return alert('Selecione um cliente na tabela (botão Editar).');
+            pwdMsg.textContent = '...'; showPwd('');
+            const r = await api('/api/admin/tenants/' + id + '/admin/ensure', { method: 'POST' });
+            if (r.data.created) {
+                showPwd(r.data.password);
+                pwdMsg.textContent = `Conta criada para ${r.data.email}. Guarde a senha com segurança.`;
+            } else {
+                pwdMsg.textContent = `Conta já existia para ${r.data.email}. Use "Redefinir senha" se precisar.`;
+            }
+        });
+
+        document.getElementById('resetarSenha').addEventListener('click', async () => {
+            const id = inputs.eid.value;
+            if (!id) return alert('Selecione um cliente na tabela (botão Editar).');
+            if (!confirm('Gerar NOVA senha para o admin deste cliente? A anterior deixará de funcionar.')) return;
+            pwdMsg.textContent = '...'; showPwd('');
+            const r = await api('/api/admin/tenants/' + id + '/admin/reset-password', { method: 'POST' });
+            showPwd(r.data.password);
+            pwdMsg.textContent = `Senha atualizada para ${r.data.email}. Guarde a senha com segurança.`;
+        });
+
+        document.getElementById('logout').addEventListener('click', async () => {
+            await api('/api/admin/logout', { method: 'POST' });
+            location.href = '/administrador';
+        });
+
+        // inicial
+        load().catch(() => location.href = '/administrador');
+    </script>
+</body>
+
+</html>

@@ -8,49 +8,35 @@
  * - Tratadores: 404 e error handler
  */
 
+
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const cookieParser = require('cookie-parser');
-const bodyParser = require('body-parser'); // ok manter se já usa
+const bodyParser = require('body-parser');
 const routes = require('./routes');
 const { notFound, errorHandler } = require('./middlewares/error');
 
 const app = express();
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 
-// Parsers
+// --- Middlewares globais ---
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true }));
-
-// Cookies
 app.use(cookieParser());
 
-// Static geral (serve /public/*)
+// --- Static ---
 app.use(express.static(PUBLIC_DIR));
+app.use('/documentos', express.static(path.join(PUBLIC_DIR, 'documentos'), { maxAge: '1h' }));
 
-// Static dedicado para documentos gerados (garante URL /documentos/gerados/AAAA/MM/arquivo.docx)
-app.use(
-    '/docuemntos',
-    express.static(path.join(PUBLIC_DIR, 'documentos'), {
-        maxAge: '1h',
-        immutable: false,
-    })
-);
-
-// Páginas estáticas (iguais às do server.js original)
+// --- Páginas estáticas ---
 app.get('/', (_, res) => res.sendFile(path.join(PUBLIC_DIR, 'login.html')));
-
 app.get('/menu', (req, res) => {
-    const usuarioId = req.cookies?.usuario_id;
-    const usuarioNome = req.cookies?.usuario_nome;
-
-    if (!usuarioId || !usuarioNome) return res.redirect('/login.html');
-    if (!req.cookies?.usuario_id) res.cookie('usuario_id', usuarioId, { path: '/' });
-
+    const { usuario_id, usuario_nome } = req.cookies || {};
+    if (!usuario_id || !usuario_nome) return res.redirect('/login.html');
+    if (!req.cookies?.usuario_id) res.cookie('usuario_id', usuario_id, { path: '/' });
     res.sendFile(path.join(PUBLIC_DIR, 'menu.html'));
 });
-
 app.get('/clientes', (_, res) => res.sendFile(path.join(PUBLIC_DIR, 'clientes.html')));
 app.get('/documentos', (_, res) => res.sendFile(path.join(PUBLIC_DIR, 'documentos.html')));
 app.get('/acoes', (_, res) => res.sendFile(path.join(PUBLIC_DIR, 'acoes.html')));
@@ -58,23 +44,17 @@ app.get('/protocolacao', (_, res) => res.sendFile(path.join(PUBLIC_DIR, 'protoco
 app.get('/kanban', (_, res) => res.sendFile(path.join(PUBLIC_DIR, 'kanban.html')));
 app.get('/usuarios', (_, res) => res.sendFile(path.join(PUBLIC_DIR, 'usuarios.html')));
 
-// Compatibilidade: manter /login fora de /api (frontend existente)
+// Mantém /login fora de /api
 const authController = require('./controllers/auth.controller');
 app.post('/login', authController.login);
 
-// API existente
-app.use('/api', routes);
+// --- Rotas API e admin (/administrador) ---
+app.use('/', routes);            // inclui admin.routes via src/routes/index.js
+app.use('/api', routes);         // se seu index também expõe endpoints de API
+app.use('/api/documentos', require('./routes/documentos.routes'));
+app.use('/debug', require('./routes/debug.routes'));
 
-// API de documentos (nova)
-const documentosRoutes = require('./routes/documentos.routes');
-app.use('/api/documentos', documentosRoutes);
-
-// TESTE
-const debugRoutes = require('./routes/debug.routes');
-app.use('/debug', debugRoutes);
-
-
-// 404 e tratador de erros
+// 404 e erro
 app.use(notFound);
 app.use(errorHandler);
 
