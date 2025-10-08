@@ -2,10 +2,9 @@
  * public/js/documentos.js
  * ----------------------------------------
  * Frontend de Documentos — SaaS multi-tenant.
- * - Envia sempre o cabeçalho `x-tenant-id` (lido do cookie `tenant_id`)
+ * - Envia o cabeçalho `x-tenant-id` (lido do cookie `tenant_id`, quando disponível)
  * - Autocomplete de clientes (busca em /api/clientes/documentos)
- * - Geração em lote dos DOCX (POST /api/documentos/gerar)
- * - Lista de clientes (fallback)
+ * - GERAR: download imediato (DOCX único ou ZIP) — POST /api/documentos/gerar
  */
 
 let clientes = [];
@@ -20,7 +19,7 @@ function getCookie(name) {
 }
 function getTenantHeaders() {
   const t = getCookie('tenant_id');
-  return { 'x-tenant-id': t || '' };
+  return t ? { 'x-tenant-id': t } : {};
 }
 
 /* =============== LISTA COMPLETA (fallback) =============== */
@@ -57,8 +56,38 @@ function carregarDadosCliente() {
   }
 }
 
-/* =============== GERAR PACOTE DE DOCUMENTOS =============== */
-async function gerarDocumentos() {
+/* ==================== helpers download ==================== */
+function filenameFromContentDisposition(cd) {
+  if (!cd) return null;
+  // Ex.: attachment; filename="doc-123.docx"; filename*=UTF-8''doc-123.docx
+  const fnStar = /filename\*\s*=\s*[^']*''([^;]+)/i.exec(cd);
+  if (fnStar && fnStar[1]) return decodeURIComponent(fnStar[1]);
+  const fn = /filename\s*=\s*"(.*?)"/i.exec(cd) || /filename\s*=\s*([^;]+)/i.exec(cd);
+  if (fn && fn[1]) return fn[1].replace(/["']/g, '').trim();
+  return null;
+}
+
+function triggerDownload(blob, filenameFallback = 'documento') {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filenameFallback;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 100);
+}
+
+function safe(v) {
+  return (v || '').toString().trim();
+}
+
+/* =============== GERAR (download imediato) =============== */
+async function gerarDocumentos(e) {
+  if (e) e.preventDefault();
+
   const form = document.getElementById('documentoForm');
   const box = document.getElementById('docs-resultado');
   if (!form || !box) {
@@ -74,23 +103,11 @@ async function gerarDocumentos() {
     .td-card-header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
     .td-card-title{font-weight:700;color:#0f172a;font-size:15px;margin:0;display:flex;align-items:center;gap:8px}
     .td-doc-number{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#f1f5f9;color:#0f172a;border:1px dashed #cbd5e1;padding:4px 8px;border-radius:10px;font-size:12px}
-    .td-doc-list{list-style:none;margin:0;padding:0;display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
-    .td-doc-item{display:flex;align-items:center;gap:12px;border:1px solid #e5e7eb;border-radius:12px;padding:10px 12px;background:linear-gradient(180deg,#fff,#fcfcfd);transition:transform .12s ease,box-shadow .12s ease,border-color .12s ease}
-    .td-doc-item:hover{transform:translateY(-1px);box-shadow:0 8px 24px rgba(2,6,23,.07);border-color:#dbe3ea}
-    .td-doc-icon{flex:0 0 auto;font-size:22px;line-height:1;background:#f1f5f9;border:1px solid #e2e8f0;width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center}
-    .td-doc-info{min-width:0;flex:1 1 auto}
-    .td-doc-title{margin:0;font-weight:600;color:#0f172a;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .td-doc-sub{margin:2px 0 0 0;color:#475569;font-size:12px;display:flex;align-items:center;gap:8px}
-    .td-chip{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;border:1px solid #e2e8f0;background:#f8fafc;color:#0f172a}
-    .td-ext{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#475569}
-    .td-doc-actions{display:flex;gap:6px;flex-wrap:wrap}
-    .td-btn{appearance:none;border:1px solid transparent;border-radius:10px;padding:6px 10px;font-size:12px;font-weight:600;cursor:pointer;transition:all .12s ease;line-height:1.1;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
-    .td-btn:focus-visible{outline:2px solid #93c5fd;outline-offset:2px}
-    .td-btn-primary{background:#1d4ed8;color:#fff}.td-btn-primary:hover{background:#1b46c4}
-    .td-btn-outline{background:#fff;border-color:#cbd5e1;color:#0f172a}.td-btn-outline:hover{background:#f8fafc;border-color:#94a3b8}
     .td-skel{display:grid;gap:10px}
     .td-skel .b{height:40px;border-radius:12px;background:linear-gradient(90deg,#f1f5f9,#e2e8f0,#f1f5f9);background-size:200% 100%;animation:tdShimmer 1.2s infinite}
     @keyframes tdShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+    .td-ok{color:#065f46;background:#ecfdf5;border:1px solid #a7f3d0;padding:8px 10px;border-radius:10px;font-weight:600}
+    .td-err{color:#991b1b;background:#fef2f2;border:1px solid #fecaca;padding:8px 10px;border-radius:10px;font-weight:600}
     `;
     const el = document.createElement('style');
     el.id = 'td-docs-styles';
@@ -108,13 +125,14 @@ async function gerarDocumentos() {
     return;
   }
 
+  const objeto_acao = get('objeto_acao') || get('acao'); // compat antigo
   const payload = {
     cliente_id,
-    objeto_acao: get('objeto_acao'),
+    objeto_acao,
     tipo_acao: get('tipo_acao'),
     requerido: get('requerido'),
     atendido_por: get('atendido_por'),
-    data_atendimento: get('data_atendimento'),
+    data_atendimento: get('data_atendimento'), // yyyy-mm-dd
     indicador: get('indicador'),
   };
 
@@ -137,62 +155,62 @@ async function gerarDocumentos() {
     </div>
   `;
 
-  const iconFor = (tipo = '') => {
-    const t = tipo.toLowerCase();
-    if (t.includes('procura')) return '🖋️';
-    if (t.includes('declara')) return '📝';
-    if (t.includes('ficha')) return '📋';
-    return '📄';
-  };
-  const extOf = (nome = '') => (nome.match(/\.([a-z0-9]{2,6})$/i)?.[1] || 'docx').toUpperCase();
-
   try {
+    const headers = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/octet-stream, application/zip, application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      ...getTenantHeaders(),
+    };
+
     const resp = await fetch('/api/documentos/gerar', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...getTenantHeaders() },
+      headers,
       credentials: 'same-origin',
       body: JSON.stringify(payload),
     });
 
-    const data = await resp.json().catch(() => ({}));
+    const ct = resp.headers.get('Content-Type') || '';
 
-    if (!resp.ok || !data?.sucesso) {
+    // Se voltar JSON, trata como erro/mensagem do back
+    if (ct.includes('application/json')) {
+      const data = await resp.json().catch(() => ({}));
+      const msg = data?.mensagem || data?.error || 'Falha ao gerar documentos.';
       box.innerHTML = `
         <div class="td-card">
           <div class="td-card-header">
             <h3 class="td-card-title">❌ Erro ao gerar</h3>
           </div>
-          <p style="margin:0;color:#dc2626">${(data && data.mensagem) || 'Falha ao gerar documentos.'}</p>
+          <p class="td-err" style="margin:0">${msg}</p>
         </div>
       `;
       return;
     }
 
-    const docs = Array.isArray(data.documentos) ? data.documentos : [];
-    const items = docs.map(doc => `
-      <li class="td-doc-item">
-        <div class="td-doc-icon" aria-hidden="true">${iconFor(doc.tipo)}</div>
-        <div class="td-doc-info">
-          <p class="td-doc-title" title="${doc.nomeArquivo}">${doc.tipo}</p>
-          <p class="td-doc-sub">
-            <span class="td-chip">${doc.tipo}</span>
-            <span class="td-ext">.${extOf(doc.nomeArquivo)}</span>
-          </p>
-        </div>
-        <div class="td-doc-actions">
-          <a class="td-btn td-btn-primary" href="${doc.url}" download="${doc.nomeArquivo}">Baixar</a>
-        </div>
-      </li>
-    `).join('');
+    // Caso de sucesso: binário (DOCX ou ZIP)
+    const blob = await resp.blob();
+    // tenta extrair filename do header
+    let filename = filenameFromContentDisposition(resp.headers.get('Content-Disposition'));
 
+    if (!filename) {
+      // fallback amigável
+      const isZip = (ct.includes('zip') || blob.type === 'application/zip');
+      const base = safe(payload.numero_documento) || safe(objeto_acao) || 'documento';
+      filename = (base.replace(/[^\w.\-]+/g, '-').replace(/-+/g, '-') || 'documento') + (isZip ? '.zip' : '.docx');
+    }
+
+    // dispara o download
+    triggerDownload(blob, filename);
+
+    // feedback visual
     box.innerHTML = `
-      <div class="td-card" role="region" aria-label="Documentos gerados">
+      <div class="td-card">
         <div class="td-card-header">
-          <h3 class="td-card-title">📁 Documentos gerados</h3>
-          <span class="td-doc-number" title="Número do Documento">${data.numero_documento || '-'}</span>
+          <h3 class="td-card-title">✅ Download iniciado</h3>
+          <span class="td-doc-number">${filename}</span>
         </div>
-        ${docs.length ? `<ul class="td-doc-list">${items}</ul>`
-        : `<p style="margin:8px 0 0;color:#64748b">Nenhum documento retornado.</p>`}
+        <p class="td-ok" style="margin:0">
+          Se o download não começou, verifique o bloqueio de pop-ups ou tente novamente.
+        </p>
       </div>
     `;
   } catch (err) {
@@ -202,7 +220,7 @@ async function gerarDocumentos() {
         <div class="td-card-header">
           <h3 class="td-card-title">❌ Erro inesperado</h3>
         </div>
-        <p style="margin:0;color:#dc2626">Erro inesperado ao gerar documentos.</p>
+        <p class="td-err" style="margin:0">Erro inesperado ao gerar/baixar o documento.</p>
       </div>
     `;
   } finally {
@@ -316,3 +334,8 @@ function validarClienteSelecionado() {
   }
   return true;
 }
+
+/* exporta no escopo global se necessário */
+window.gerarDocumentos = gerarDocumentos;
+window.carregarClientes = carregarClientes;
+window.carregarDadosCliente = carregarDadosCliente;

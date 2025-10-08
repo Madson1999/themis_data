@@ -81,7 +81,6 @@ async function query(sql, params = []) {
  *   const rows = await executeQuery(sql, params);
  */
 function withTenant(sql, tenantId, params = []) {
-  // Pontos de corte onde devemos inserir o filtro antes
   const clauses = [' order by ', ' group by ', ' limit '];
   const lower = sql.toLowerCase();
   let insertPos = sql.length;
@@ -173,7 +172,6 @@ async function getColumnType(table, column) {
   return rows[0]?.COLUMN_TYPE || null;
 }
 async function ensureEnumValues(table, column, enumList, defaultVal) {
-  // Assinatura ENUM desejada
   const desired = `enum('${enumList.join("','")}')`;
   const current = (await getColumnType(table, column)) || '';
 
@@ -290,30 +288,7 @@ async function initializeDatabase() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
-    // DOCUMENTOS (referencia clientes)
-    await executeUpdate(`
-      CREATE TABLE IF NOT EXISTS documentos(
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        tenant_id INT NOT NULL,
-        numero VARCHAR(50) NOT NULL,
-        cliente_id INT NOT NULL,
-        tipo_documento VARCHAR(100),
-        valor DECIMAL(10, 2),
-        data_inicio DATE,
-        data_fim DATE,
-        condicoes TEXT,
-        arquivo_path VARCHAR(500),
-        data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        CONSTRAINT fk_documentos_tenant FOREIGN KEY(tenant_id) REFERENCES tenants(id)
-          ON UPDATE CASCADE ON DELETE RESTRICT,
-        CONSTRAINT fk_documentos_cliente FOREIGN KEY(cliente_id) REFERENCES clientes(id)
-          ON UPDATE CASCADE ON DELETE RESTRICT,
-        INDEX idx_documentos_cliente(cliente_id),
-        INDEX idx_documentos_numero(numero)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-    `);
-
-    // AÇÕES (referencia clientes)
+    // === TABELA AÇÕES (referencia clientes) ===
     await executeUpdate(`
       CREATE TABLE IF NOT EXISTS acoes(
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -340,9 +315,9 @@ async function initializeDatabase() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
-
     // 3) Ajustes idempotentes: tenant_id + índices/FKs nas tabelas de negócio
-    const businessTables = ['usuarios', 'logs_acesso', 'configuracoes', 'clientes', 'documentos', 'acoes'];
+    // REMOVIDO 'documentos' desta lista
+    const businessTables = ['usuarios', 'logs_acesso', 'configuracoes', 'clientes', 'acoes'];
 
     for (const t of businessTables) {
       if (await tableExists(t)) {
@@ -375,9 +350,7 @@ async function initializeDatabase() {
     await ensureUniqueIndex('clientes', 'uniq_clientes_tenant_cpf', '(tenant_id, cpf_cnpj)');
     await ensureIndex('clientes', 'idx_clientes_tenant_nome', '(tenant_id, nome)');
 
-    // 5) Índices extras
-    await ensureIndex('documentos', 'idx_documentos_numero', '(numero)');
-    await ensureIndex('documentos', 'idx_documentos_cliente', '(cliente_id)');
+    // 5) Índices extras (REMOVIDOS os de `documentos`)
     await ensureIndex('acoes', 'idx_acoes_cliente', '(cliente_id)');
     await ensureIndex('acoes', 'idx_acoes_status', '(status)');
     await ensureIndex('acoes', 'idx_acoes_criacao', '(data_criacao)');

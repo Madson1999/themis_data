@@ -4,13 +4,17 @@
  * Regras de Tenants (licenças do SaaS).
  *
  * Funcionalidades:
- * - list()                → lista tenants
- * - get(id)               → obtém tenant por id
- * - create(data)          → cria tenant (licença ativa por padrão)
- * - update(id, fields)    → atualiza campos permitidos
- * - remove(id)            → desativa licença (soft delete)
- * - ensureAdminUser(id)   → garante usuário admin do tenant (retorna senha apenas na criação)
- * - resetAdminPassword(id)→ reseta senha do admin e retorna a nova senha (texto) APENAS nesta resposta
+ * - list()                  → lista tenants
+ * - get(id)                 → obtém tenant por id
+ * - create(data)            → cria tenant (licença ativa por padrão)
+ * - update(id, fields)      → atualiza campos permitidos
+ * - remove(id)              → desativa licença (soft delete)
+ * - ensureAdminUser(id)     → garante usuário admin do tenant (retorna senha apenas na criação)
+ * - resetAdminPassword(id)  → reseta senha do admin e retorna a nova senha (texto) APENAS nesta resposta
+ *
+ * Helpers adicionais:
+ * - getNomeEmpresaByTenantId(tenantId) → retorna nome_empresa do tenant (com cache simples)
+ * - getSlugEmpresaByTenantId(tenantId) → retorna slug seguro do nome_empresa (para S3/pastas)
  *
  * Observações:
  * - Usuário admin do tenant é criado com email = tenants.email_admin.
@@ -31,24 +35,45 @@ function genPassword(len = 12) {
     return out;
 }
 
-function sanitizeTenantInput({ nome_empresa, cnpj, email_admin, plano = 'basic' } = {}) {
+function sanitizeTenantInput({ nome_empresa, cnpj, email_admin, plano = 'basic', licenca_ativa, data_fim } = {}) {
     const allowedPlans = new Set(['basic', 'plus', 'ultra']);
     const safePlan = allowedPlans.has(String(plano)) ? String(plano) : 'basic';
     const safeNome = (nome_empresa || '').toString().trim();
-    const safeCnpj = (cnpj ?? null) ? String(cnpj).trim() : null;
+    const safeCnpj = (cnpj ?? null) ? String(cnpj).replace(/\D+/g, '').trim() : null;
     const safeEmail = (email_admin || '').toString().trim().toLowerCase();
-    return { nome_empresa: safeNome, cnpj: safeCnpj, email_admin: safeEmail, plano: safePlan };
+    const safeLicAtiva = (typeof licenca_ativa === 'boolean') ? licenca_ativa : undefined;
+    const safeDataFim = (data_fim ?? undefined);
+
+    return {
+        nome_empresa: safeNome,
+        cnpj: safeCnpj,
+        email_admin: safeEmail,
+        plano: safePlan,
+        ...(safeLicAtiva !== undefined ? { licenca_ativa: safeLicAtiva } : {}),
+        ...(safeDataFim !== undefined ? { data_fim: safeDataFim } : {}),
+    };
 }
+
+function slugifyEmpresa(s) {
+    return String(s || '')
+        .normalize('NFKD')
+        .replace(/[\u0300-\u036f]/g, '') // remove acentos
+        .replace(/[^\w.-]+/g, '-')       // somente [a-zA-Z0-9_.-]
+        .replace(/-+/g, '-')             // hifens repetidos
+        .replace(/^[-.]+|[-.]+$/g, '')   // trim - e .
+        .toLowerCase() || 'empresa';
+}
+
+/* cache simples em memória para leituras repetidas */
+const _nomeCache = new Map(); // tenant_id -> nome_empresa (string)
 
 /* ------------------------- tenants CRUD ------------------------- */
 exports.list = async () => {
-    return await executeQuery(
-        `
+    return await executeQuery(`
     SELECT id, nome_empresa, cnpj, email_admin, plano, licenca_ativa, data_inicio, data_fim
       FROM tenants
      ORDER BY id DESC
-  `
-    );
+  `);
 };
 
 exports.get = async (id) => {
@@ -66,19 +91,24 @@ exports.create = async (data) => {
 
     const result = await executeUpdate(
         `
-    INSERT INTO tenants (nome_empresa, cnpj, email_admin, plano, licenca_ativa)
-    VALUES (?, ?, ?, ?, TRUE)
-  `,
+      INSERT INTO tenants (nome_empresa, cnpj, email_admin, plano, licenca_ativa)
+      VALUES (?, ?, ?, ?, TRUE)
+    `,
         [nome_empresa, cnpj, email_admin, plano]
     );
+
     const id = result.insertId;
+    // limpa cache, por via das dúvidas
+    _nomeCache.delete(id);
     return await exports.get(id);
 };
 
 exports.update = async (id, fields = {}) => {
     const cleaned = sanitizeTenantInput(fields);
+
     // Campos permitidos para update
     const allowed = ['nome_empresa', 'cnpj', 'email_admin', 'plano', 'licenca_ativa', 'data_fim'];
+
     const sets = [];
     const params = [];
 
@@ -95,6 +125,10 @@ exports.update = async (id, fields = {}) => {
 
     params.push(id);
     await executeUpdate(`UPDATE tenants SET ${sets.join(', ')} WHERE id = ?`, params);
+
+    // invalida cache de nome_empresa
+    _nomeCache.delete(id);
+
     return await exports.get(id);
 };
 
@@ -103,7 +137,44 @@ exports.remove = async (id) => {
         `UPDATE tenants SET licenca_ativa = FALSE, data_fim = NOW() WHERE id = ?`,
         [id]
     );
+
+    // invalida cache
+    _nomeCache.delete(id);
+
     return await exports.get(id);
+};
+
+/* ------------------------- helpers nome_empresa/slug ------------------------- */
+/**
+ * Retorna o nome_empresa do tenant (com cache).
+ */
+exports.getNomeEmpresaByTenantId = async (tenantId) => {
+    if (!tenantId) {
+        const err = new Error('tenant_id obrigatório');
+        err.status = 400;
+        throw err;
+    }
+
+    if (_nomeCache.has(tenantId)) return _nomeCache.get(tenantId);
+
+    const rows = await executeQuery(`SELECT nome_empresa FROM tenants WHERE id = ? LIMIT 1`, [tenantId]);
+    const nome = rows?.[0]?.nome_empresa;
+    if (!nome) {
+        const err = new Error(`Tenant ${tenantId} não encontrado ou sem nome_empresa`);
+        err.status = 404;
+        throw err;
+    }
+    _nomeCache.set(tenantId, nome);
+    return nome;
+};
+
+/**
+ * Retorna o slug seguro do nome_empresa do tenant.
+ * Útil para montar prefixos/pastas no S3/MinIO: <slug-empresa>/uploads|documentos/...
+ */
+exports.getSlugEmpresaByTenantId = async (tenantId) => {
+    const nome = await exports.getNomeEmpresaByTenantId(tenantId);
+    return slugifyEmpresa(nome);
 };
 
 /* ------------------------- admin do tenant ------------------------- */
@@ -113,7 +184,11 @@ exports.remove = async (id) => {
  */
 exports.ensureAdminUser = async (tenantId) => {
     const tenant = await exports.get(tenantId);
-    if (!tenant) throw new Error('Tenant não encontrado');
+    if (!tenant) {
+        const err = new Error('Tenant não encontrado');
+        err.status = 404;
+        throw err;
+    }
 
     const email = String(tenant.email_admin || '').toLowerCase().trim();
     if (!email) {
@@ -137,9 +212,9 @@ exports.ensureAdminUser = async (tenantId) => {
     const name = `${tenant.nome_empresa}`.slice(0, 100);
     const result = await executeUpdate(
         `
-    INSERT INTO usuarios (tenant_id, nome, email, senha, nivel_acesso, ativo)
-    VALUES (?, ?, ?, ?, 'admin', TRUE)
-  `,
+      INSERT INTO usuarios (tenant_id, nome, email, senha, nivel_acesso, ativo)
+      VALUES (?, ?, ?, ?, 'admin', TRUE)
+    `,
         [tenantId, name, email, hash]
     );
 
@@ -152,7 +227,11 @@ exports.ensureAdminUser = async (tenantId) => {
  */
 exports.resetAdminPassword = async (tenantId) => {
     const tenant = await exports.get(tenantId);
-    if (!tenant) throw new Error('Tenant não encontrado');
+    if (!tenant) {
+        const err = new Error('Tenant não encontrado');
+        err.status = 404;
+        throw err;
+    }
 
     const email = String(tenant.email_admin || '').toLowerCase().trim();
     if (!email) {
@@ -176,9 +255,9 @@ exports.resetAdminPassword = async (tenantId) => {
         const name = `${tenant.nome_empresa}`.slice(0, 100);
         const result = await executeUpdate(
             `
-      INSERT INTO usuarios (tenant_id, nome, email, senha, nivel_acesso, ativo)
-      VALUES (?, ?, ?, ?, 'admin', TRUE)
-    `,
+        INSERT INTO usuarios (tenant_id, nome, email, senha, nivel_acesso, ativo)
+        VALUES (?, ?, ?, ?, 'admin', TRUE)
+      `,
             [tenantId, name, email, hash]
         );
         return { reset: false, created: true, email, userId: result.insertId, password: plain };

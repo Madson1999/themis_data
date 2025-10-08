@@ -4,6 +4,7 @@
  * Rotas de ações (processos) e Kanban — multi-tenant.
  *
  * - Exige identificação do tenant em todas as rotas (cookie `tenant_id` ou header `x-tenant-id`)
+ * - Uploads usando multer.memoryStorage() (arquivos em memória → ideal para enviar ao S3/MinIO)
  * - Algumas rotas também exigem usuário autenticado via cookies (ensureAuthCookies)
  *
  * Endpoints:
@@ -22,17 +23,24 @@
  */
 
 const { Router } = require('express');
+const multer = require('multer');
 const c = require('../controllers/acoes.controller');
-const { upload } = require('../utils/uploads');                  // multer centralizado
 const { ensureAuthCookies } = require('../middlewares/authCookies');
 
 const router = Router();
+
+// ------ Multer em memória (nada em disco) ------
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 50 * 1024 * 1024 }, // 50MB (ajuste se necessário)
+});
 
 /** Middleware local: exige tenant_id (cookie ou header) em todas as rotas abaixo */
 function ensureTenant(req, res, next) {
     const fromCookie = req.cookies?.tenant_id;
     const fromHeader = req.headers['x-tenant-id'];
-    const t = Number(fromCookie ?? fromHeader);
+    const raw = (fromCookie ?? fromHeader ?? '').toString().trim();
+    const t = Number(raw);
     if (!Number.isFinite(t) || t <= 0) {
         return res.status(401).json({ sucesso: false, mensagem: 'Tenant não identificado' });
     }
@@ -58,6 +66,7 @@ router.post(
 );
 
 // UPLOADS ADICIONAIS (mantendo rotas antigas)
+// Observação: com memoryStorage, controllers devem ler req.file.buffer / req.files[field][0].buffer
 router.post('/upload-acao', upload.single('arquivo'), c.uploadAcao);
 router.post('/upload-contrato', upload.single('arquivo'), c.uploadContrato);
 router.post('/upload-procuracao', upload.single('arquivo'), c.uploadProcuracao);
@@ -65,6 +74,10 @@ router.post('/upload-declaracao', upload.single('arquivo'), c.uploadDeclaracao);
 router.post('/upload-ficha', upload.single('arquivo'), c.uploadFicha);
 router.post('/upload-documentacao', upload.single('arquivo'), c.uploadDocumentacao);
 router.post('/upload-provas', upload.single('arquivo'), c.uploadProvas);
+
+// (Opcional) Novo endpoint para anexar direto ao S3:
+// aponta para o handler que envia ao MinIO: c.uploadAnexoS3
+router.post('/:id/anexos', upload.single('arquivo'), c.uploadAnexoS3);
 
 // REMOVER ARQUIVO
 router.post('/remover-arquivo', c.removerArquivo);

@@ -4,8 +4,8 @@
  * Regras de documentos — Multi-tenant.
  * - Usa config/documentos (gerarPacoteDocumentos) para gerar os arquivos .docx
  * - Persiste metadados por documento em `documentos`:
- *      id, tenant_id, numero, cliente_id, tipo_documento, arquivo_path, data_criacao
- * - Consultas para listagem e recuperação de arquivo (sempre filtrando por tenant_id)
+ *      id, tenant_id, numero, cliente_id, tipo_documento, data_criacao
+ * - Consultas para listagem (sempre filtrando por tenant_id)
  *
  * Observações de schema:
  *  - Tabela de clientes: `clientes` (plural)
@@ -13,8 +13,6 @@
  *  - Útil ter índices: (tenant_id, cliente_id), (tenant_id, numero)
  */
 
-const path = require('path');
-const fs = require('fs-extra');
 const { executeQuery } = require('../config/database');
 const { gerarPacoteDocumentos } = require('../config/documentos');
 
@@ -51,7 +49,7 @@ exports.gerar = async (tenant_id, payload = {}) => {
     }
     const cliente = cRows[0];
 
-    // Geração dos documentos (armazenamento já é segregado por tenant dentro de config/documentos)
+    // Geração dos documentos (armazenamento segregado por tenant dentro de config/documentos)
     const resultado = await gerarPacoteDocumentos({
         tenant_id: tId,
         cliente,
@@ -64,23 +62,22 @@ exports.gerar = async (tenant_id, payload = {}) => {
         indicador: payload.indicador || '',
     });
 
-    // Persiste metadados: 1 linha por arquivo gerado
-    // resultado.documentos → [{ tipo, sucesso, caminho, nomeArquivo, url }]
+    // resultado.documentos → [{ tipo, sucesso, ... }]
     const numeroDoc = resultado.numero_documento;
     for (const doc of resultado.documentos || []) {
         if (!doc.sucesso) continue;
         await executeQuery(
             `INSERT INTO documentos
-        (tenant_id, numero, cliente_id, tipo_documento, arquivo_path, data_criacao)
-       VALUES (?, ?, ?, ?, ?, NOW())`,
-            [tId, numeroDoc, cliente.id, doc.tipo, doc.caminho]
+         (tenant_id, numero, cliente_id, tipo_documento, data_criacao)
+       VALUES (?, ?, ?, ?, NOW())`,
+            [tId, numeroDoc, cliente.id, doc.tipo]
         );
     }
 
     return {
         sucesso: true,
         numero_documento: numeroDoc,
-        documentos: resultado.documentos,
+        documentos: resultado.documentos, // mantém para o front saber nomes/urls gerados pelo módulo
     };
 };
 
@@ -96,57 +93,22 @@ exports.listar = async (tenant_id, limit = 20) => {
 
     return executeQuery(
         `
-    SELECT d.id,
-           d.numero,
-           d.tipo_documento,
-           d.cliente_id,
-           c.nome AS cliente_nome,
-           d.arquivo_path,
-           d.data_criacao
-      FROM documentos d
-      JOIN clientes c
-        ON c.id = d.cliente_id
-       AND c.tenant_id = d.tenant_id
-     WHERE d.tenant_id = ?
-     ORDER BY d.data_criacao DESC
-     LIMIT ?
+      SELECT d.id,
+             d.numero,
+             d.tipo_documento,
+             d.cliente_id,
+             c.nome AS cliente_nome,
+             d.data_criacao
+        FROM documentos d
+        JOIN clientes c
+          ON c.id = d.cliente_id
+         AND c.tenant_id = d.tenant_id
+       WHERE d.tenant_id = ?
+       ORDER BY d.data_criacao DESC
+       LIMIT ?
     `,
         [tId, Number(limit) || 20]
     );
 };
 
-/**
- * Recupera o caminho do arquivo para download (valida tenant).
- *
- * @param {number} tenant_id
- * @param {number} documentoId
- * @returns {Promise<{caminho:string, nome:string} | {status:number, body:any}>}
- */
-exports.getArquivoPath = async (tenant_id, documentoId) => {
-    const tId = Number(tenant_id);
-    if (!Number.isFinite(tId) || tId <= 0) {
-        return { status: 401, body: { sucesso: false, mensagem: 'Tenant não identificado' } };
-    }
-    const id = Number(documentoId);
-    if (!Number.isFinite(id) || id <= 0) {
-        return { status: 400, body: { sucesso: false, mensagem: 'documentoId inválido' } };
-    }
 
-    const dRows = await executeQuery(
-        `SELECT arquivo_path
-       FROM documentos
-      WHERE tenant_id = ? AND id = ?
-      LIMIT 1`,
-        [tId, id]
-    );
-    if (!dRows.length) {
-        return { status: 404, body: { sucesso: false, mensagem: 'Documento não encontrado' } };
-    }
-
-    const arquivoPath = dRows[0].arquivo_path;
-    if (!(await fs.pathExists(arquivoPath))) {
-        return { status: 404, body: { sucesso: false, mensagem: 'Arquivo do documento não encontrado' } };
-    }
-
-    return { caminho: arquivoPath, nome: path.basename(arquivoPath) };
-};

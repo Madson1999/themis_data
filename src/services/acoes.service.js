@@ -1,33 +1,18 @@
 /**
- * acoes.service.js
+ * services/acoes.service.js
  * ----------------------------------------
- * Service de Ações (processos) — Multi-tenant.
+ * Service de Ações — apenas DB + MinIO/S3 (sem filesystem local).
  *
- * Funcionalidades:
- * - Criar ação (monta pastas por tenant, move uploads iniciais e insere no banco)
- * - Upload adicional de arquivos (contrato, procuração, declaração, ficha, documentação, provas, ação)
- * - Remoção de arquivos associados a uma ação
- * - Listagem de ações (com filtro por status) — já retorna nomes (cliente, designado, criador)
- * - Aprovação de ação (define data_aprovado)
- * - Consulta/atualização de status e designado (aceita nome ou id)
- * - Listagem de arquivos por tipo
- * - Comentários (salvar/obter)
- * - “Minhas ações” (designadas ao usuário logado)
- *
- * Regras SaaS:
- * - TODAS as operações recebem e validam tenant_id.
- * - Tabela de clientes é `clientes` (plural).
- * - Tabela `acoes` contém chaves: (tenant_id, cliente_id, designado_id, criador_id, ...)
- * - Pastas de arquivos: public/uploads/PROCESSOS/<tenant_id>/<Inicial>/<Cliente>/ <Título>/
+ * - cria/atualiza/consulta ações no MySQL
+ * - helpers para montar prefixos de S3 (cliente + título)
+ * - listarArquivos: lê diretório da ação no S3 e devolve agrupado por tipo
  */
 
-const path = require('path');
-const fs = require('fs-extra');
 const { executeQuery } = require('../config/database');
+const { listObjectsEmpresaCategoria, presignedGetUrl } = require('../services/storage.service');
 
-/* ============================ Helpers ============================ */
 
-const BASE_PROCESSOS = path.join(process.cwd(), 'public', 'uploads', 'PROCESSOS');
+/* ============================ Helpers gerais ============================ */
 
 function assertTenant(tenant_id) {
     const t = Number(tenant_id);
@@ -39,193 +24,110 @@ function assertTenant(tenant_id) {
     return t;
 }
 
-async function ensureDir(p) {
-    await fs.ensureDir(p);
-    return p;
-}
-
-function safeFsName(s) {
-    return String(s || '')
-        .replace(/[\/\\?%*:|"<>]/g, '-') // caracteres proibidos
+// pasta/label segura (permite espaço e "-"; remove barras e símbolos perigosos)
+function safeFolderLabel(str, fallback = 'NA') {
+    const s = String(str || '')
+        .normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[\/\\]+/g, '-')             // evita quebrar prefixo no S3
+        .replace(/[^\w\s.\-]+/g, '')          // mantém letras/números/espaço/._-
         .replace(/\s+/g, ' ')
         .trim();
+    return s || fallback;
 }
 
-async function gerarNomeUnico(dir, nomeDesejado) {
-    let destino = path.join(dir, nomeDesejado);
-    if (!(await fs.pathExists(destino))) return { nome: nomeDesejado, caminho: destino };
+/* ============================ Queries auxiliares ============================ */
 
-    const ext = path.extname(nomeDesejado);
-    const base = path.basename(nomeDesejado, ext);
-    let i = 1;
-    while (await fs.pathExists(destino)) {
-        const candidato = `${base} (${i})${ext}`;
-        destino = path.join(dir, candidato);
-        i++;
-    }
-    return { nome: path.basename(destino), caminho: destino };
-}
-
-async function getCliente(tenant_id, cliente_id) {
+exports.getClienteBasico = async (tenantId, clienteId) => {
     const rows = await executeQuery(
         `SELECT id, nome, cpf_cnpj
        FROM clientes
       WHERE tenant_id = ? AND id = ?
       LIMIT 1`,
-        [tenant_id, cliente_id]
+        [tenantId, clienteId]
     );
     return rows[0] || null;
-}
+};
 
-async function getUsuarioById(tenant_id, user_id) {
-    if (!user_id) return null;
+exports.getAcaoMeta = async (tenantId, acaoId) => {
+    const rows = await executeQuery(
+        `SELECT a.id,
+            a.titulo,
+            a.designado_id,
+            c.nome     AS cliente_nome,
+            c.cpf_cnpj AS cliente_cpf_cnpj
+       FROM acoes a
+       JOIN clientes c ON c.id = a.cliente_id
+      WHERE a.tenant_id = ? AND a.id = ?
+      LIMIT 1`,
+        [tenantId, acaoId]
+    );
+    return rows[0] || null;
+};
+
+async function getUsuarioById(tenantId, userId) {
+    if (!userId) return null;
     const rows = await executeQuery(
         `SELECT id, nome, email
        FROM usuarios
       WHERE tenant_id = ? AND id = ?
       LIMIT 1`,
-        [tenant_id, user_id]
+        [tenantId, userId]
     );
     return rows[0] || null;
 }
 
-async function getUsuarioIdByNome(tenant_id, nome) {
+async function getUsuarioIdByNome(tenantId, nome) {
     const rows = await executeQuery(
         `SELECT id
        FROM usuarios
       WHERE tenant_id = ? AND TRIM(LOWER(nome)) = TRIM(LOWER(?))
       LIMIT 1`,
-        [tenant_id, nome]
+        [tenantId, nome]
     );
     return rows[0]?.id || null;
 }
 
-function pastaAcaoFrom(tenant_id, clienteNome, clienteCpfCnpj, titulo) {
-    const letraInicial = (clienteNome || 'X').charAt(0).toUpperCase();
-    const nomeClienteFormatado = safeFsName(`${clienteNome} ${clienteCpfCnpj || ''}`.trim());
-    const tituloFormatado = safeFsName(String(titulo || 'Sem Título'));
-    return path.join(BASE_PROCESSOS, String(tenant_id), letraInicial, nomeClienteFormatado, tituloFormatado);
-}
+/* ============================ Ações (DB) ============================ */
 
-/* ============================ CRUD / FS ============================ */
-
-// Criar uma ação nova
+// Criar uma ação (sem mexer em arquivos — uploads vão pelo controller direto ao S3)
 exports.criar = async ({
     tenant_id,
     cliente_id,
-    designado_id, // pode vir vazio
+    designado_id,           // opcional
     titulo,
     status = 'Não iniciado',
     criador_id = null,
-    arquivos = [],
-    complexidade, // 'Baixa' | 'Média' | 'Alta'
+    complexidade,           // 'Baixa' | 'Média' | 'Alta'
 }) => {
     const tId = assertTenant(tenant_id);
     if (!cliente_id) throw new Error('cliente_id é obrigatório');
     if (!titulo) throw new Error('titulo é obrigatório');
     if (!complexidade) throw new Error('complexidade é obrigatória');
 
-    // Buscar cliente (do tenant)
-    const cliente = await getCliente(tId, cliente_id);
-    if (!cliente) throw new Error('Cliente não encontrado');
+    // valida cliente
+    const cli = await exports.getClienteBasico(tId, cliente_id);
+    if (!cli) throw new Error('Cliente não encontrado');
 
-    // Buscar designado (se informado)
+    // valida designado se veio
     let designadoIdFinal = null;
     if (designado_id && designado_id !== 'Nenhum') {
         const d = await getUsuarioById(tId, designado_id);
         if (d) designadoIdFinal = d.id;
     }
 
-    // Pasta do processo (por tenant + cliente + título)
-    const pastaAcao = pastaAcaoFrom(tId, cliente.nome, cliente.cpf_cnpj, titulo);
-    await ensureDir(pastaAcao);
-
-    // Mover arquivos (com prefixos)
-    for (const arquivo of arquivos) {
-        let prefixo = '';
-        if (arquivo.fieldname === 'contratoArquivo') prefixo = 'CON - ';
-        else if (arquivo.fieldname === 'procuracaoArquivo') prefixo = 'PRO - ';
-        else if (arquivo.fieldname === 'declaracaoArquivo') prefixo = 'DEC - ';
-        else if (arquivo.fieldname === 'fichaArquivo') prefixo = 'FIC - ';
-        else if (arquivo.fieldname === 'documentacaoArquivo') prefixo = 'DOC - ';
-        else if (arquivo.fieldname === 'provasArquivo') prefixo = 'PROV - ';
-        else if (arquivo.fieldname === 'acaoArquivo') prefixo = 'ACAO - ';
-
-        const nomeDesejado = prefixo + arquivo.originalname;
-        const { caminho } = await gerarNomeUnico(pastaAcao, nomeDesejado);
-        await fs.move(arquivo.path, caminho);
-    }
-
-    // Inserir ação
+    // insere ação 
     const result = await executeQuery(
         `INSERT INTO acoes
-      (tenant_id, cliente_id, titulo, complexidade, designado_id, criador_id, status, arquivo_path, data_criacao)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
-        [tId, cliente.id, titulo, complexidade, designadoIdFinal, criador_id ?? null, status, pastaAcao]
+       (tenant_id, cliente_id, titulo, complexidade, designado_id, criador_id, status, data_criacao)
+     VALUES (?,         ?,          ?,      ?,            ?,            ?,         ?,        NOW())`,
+        [tId, cli.id, titulo, complexidade, designadoIdFinal, (criador_id ?? null), status]
     );
 
-    return { id: result.insertId, pasta: pastaAcao };
+    return { id: result.insertId };
 };
 
-// Upload adicional
-exports.uploadArquivo = async ({ tenant_id, acao_id, arquivo, prefixo }) => {
-    const tId = assertTenant(tenant_id);
+/* ============================ Listagem / estado ============================ */
 
-    const rows = await executeQuery(
-        `SELECT id, tenant_id, cliente_id, titulo, arquivo_path
-       FROM acoes
-      WHERE tenant_id = ? AND id = ?
-      LIMIT 1`,
-        [tId, acao_id]
-    );
-    const acao = rows[0];
-    if (!acao) throw new Error('Ação não encontrada');
-
-    // Garantir pasta (reconstroi se vazio)
-    let pastaAcao = acao.arquivo_path;
-    if (!pastaAcao) {
-        const cliente = await getCliente(tId, acao.cliente_id);
-        if (!cliente) throw new Error('Cliente não encontrado');
-        pastaAcao = pastaAcaoFrom(tId, cliente.nome, cliente.cpf_cnpj, acao.titulo);
-        await ensureDir(pastaAcao);
-        await executeQuery('UPDATE acoes SET arquivo_path = ? WHERE tenant_id = ? AND id = ?', [pastaAcao, tId, acao_id]);
-    } else {
-        await ensureDir(pastaAcao);
-    }
-
-    // Nome único
-    let nomeArquivo = `${prefixo} - ${arquivo.originalname}`;
-    const { caminho } = await gerarNomeUnico(pastaAcao, nomeArquivo);
-    nomeArquivo = path.basename(caminho);
-
-    await fs.move(arquivo.path, caminho);
-    // (arquivo_path já aponta para a pasta; não salvamos o arquivo individual na base)
-    return { nome: nomeArquivo, caminho };
-};
-
-// Remover arquivo
-exports.removerArquivo = async ({ tenant_id, acaoId, nomeArquivo }) => {
-    const tId = assertTenant(tenant_id);
-
-    const rows = await executeQuery(
-        `SELECT arquivo_path
-       FROM acoes
-      WHERE tenant_id = ? AND id = ?
-      LIMIT 1`,
-        [tId, acaoId]
-    );
-    const acao = rows[0];
-    if (!acao) throw new Error('Ação não encontrada');
-
-    const caminho = path.join(acao.arquivo_path || '', nomeArquivo);
-    if (acao.arquivo_path && (await fs.pathExists(caminho))) {
-        await fs.remove(caminho);
-        return true;
-    }
-    throw new Error('Arquivo não encontrado');
-};
-
-// Listar ações (com filtro opcional de status) — retorna nomes já resolvidos
 exports.listar = async (tenant_id, status) => {
     const tId = assertTenant(tenant_id);
 
@@ -247,7 +149,6 @@ exports.listar = async (tenant_id, status) => {
       COALESCE(uC.nome, 'Sistema') AS criador,
       a.status,
       a.data_criacao,
-      a.arquivo_path,
       a.data_aprovado
     FROM acoes a
     LEFT JOIN clientes c ON c.id = a.cliente_id AND c.tenant_id = a.tenant_id
@@ -260,7 +161,6 @@ exports.listar = async (tenant_id, status) => {
     );
 };
 
-// Aprovar ação
 exports.aprovar = (tenant_id, id) => {
     const tId = assertTenant(tenant_id);
     return executeQuery(
@@ -269,7 +169,6 @@ exports.aprovar = (tenant_id, id) => {
     );
 };
 
-// Buscar status (retorna também nome do designado)
 exports.getStatus = async (tenant_id, id) => {
     const tId = assertTenant(tenant_id);
     const rows = await executeQuery(
@@ -286,7 +185,6 @@ exports.getStatus = async (tenant_id, id) => {
     return r ? { status: r.status, complexidade: r.complexidade, designado: r.designado } : null;
 };
 
-// Atualizar status/designado/complexidade
 exports.updateStatus = async (tenant_id, id, { status, designado, complexidade }) => {
     const tId = assertTenant(tenant_id);
 
@@ -296,23 +194,20 @@ exports.updateStatus = async (tenant_id, id, { status, designado, complexidade }
     if (status !== undefined) {
         sets.push('status = ?');
         params.push(status);
-        // regras de data_concluido conforme enum usado
         const st = String(status || '').toLowerCase();
-        if (st === 'concluído' || st === 'concluido' || st === 'aprovado' || st === 'protocolado') {
+        if (['concluído', 'concluido', 'aprovado', 'protocolado'].includes(st)) {
             sets.push('data_concluido = IFNULL(data_concluido, NOW())');
-        } else if (st === 'em andamento' || st === 'não iniciado' || st === 'nao iniciado' || st === 'devolvido') {
+        } else if (['em andamento', 'não iniciado', 'nao iniciado', 'devolvido'].includes(st)) {
             sets.push('data_concluido = NULL');
         }
     }
 
-    // 'designado' pode ser id numérico ou nome
     if (designado !== undefined) {
         let desigId = null;
         if (designado === null || designado === '' || String(designado).toLowerCase() === 'nenhum') {
             desigId = null;
         } else if (/^\d+$/.test(String(designado))) {
             desigId = Number(designado);
-            // opcional: validar que existe no tenant
             const u = await getUsuarioById(tId, desigId);
             if (!u) {
                 const err = new Error('Designado não encontrado');
@@ -320,7 +215,6 @@ exports.updateStatus = async (tenant_id, id, { status, designado, complexidade }
                 throw err;
             }
         } else {
-            // veio nome
             desigId = await getUsuarioIdByNome(tId, String(designado));
             if (!desigId) {
                 const err = new Error('Designado não encontrado');
@@ -338,66 +232,92 @@ exports.updateStatus = async (tenant_id, id, { status, designado, complexidade }
     }
 
     if (!sets.length) return;
-
     const sql = `UPDATE acoes SET ${sets.join(', ')} WHERE tenant_id = ? AND id = ?`;
     params.push(tId, id);
     return executeQuery(sql, params);
 };
 
-// Listar arquivos de uma ação (por prefixo)
-exports.listarArquivos = async (tenant_id, id) => {
+/* ============================ Listagem de arquivos (S3) ============================ */
+
+/**
+ * Lê os anexos no S3 sob:
+ *   <Empresa>/Processos/<Cliente - CPF>/<Título>/*
+ * e agrupa por tipo com base no prefixo do nome do arquivo:
+ *   CON_ | PRO_ | DEC_ | FIC_ | DOC_ | PROV_ | ACAO_
+ * (também aceita versões antigas com "CON - ", etc.)
+ */
+exports.listarArquivos = async (tenant_id, acaoId) => {
     const tId = assertTenant(tenant_id);
 
-    const rows = await executeQuery(
-        `SELECT arquivo_path, designado_id
-       FROM acoes
-      WHERE tenant_id = ? AND id = ?
-      LIMIT 1`,
-        [tId, id]
-    );
-    const acao = rows[0];
-
-    if (!acao || !acao.arquivo_path || !(await fs.pathExists(acao.arquivo_path))) {
-        // retorna estrutura vazia mantendo a compat esperada pelo frontend
-        let designadoNome = 'Nenhum';
-        if (acao?.designado_id) {
-            const u = await getUsuarioById(tId, acao.designado_id);
-            if (u?.nome) designadoNome = u.nome;
-        }
+    // pega metadados da ação/cliente
+    const meta = await exports.getAcaoMeta(tId, acaoId); // { titulo, cliente_nome, cliente_cpf_cnpj, designado_id }
+    if (!meta) {
         return {
-            Contrato: [],
-            Procuracao: [],
-            Declaracao: [],
-            Ficha: [],
-            Documentacao: [],
-            Provas: [],
-            Acao: [],
-            __designadoAtual: designadoNome,
+            Contrato: [], Procuracao: [], Declaracao: [], Ficha: [],
+            Documentacao: [], Provas: [], Acao: [], __designadoAtual: 'Nenhum',
         };
     }
 
-    const arquivos = await fs.readdir(acao.arquivo_path);
-    const lista = arquivos.map((nome) => ({ nome, path: path.join(acao.arquivo_path, nome) }));
+    const clienteFolder = safeFolderLabel(`${meta.cliente_nome} - ${meta.cliente_cpf_cnpj}`);
+    const tituloFolder = safeFolderLabel(meta.titulo, 'Sem Titulo');
+    const subpath = `${clienteFolder}/${tituloFolder}`; // depois de <Empresa>/Processos/
 
+    // lista objetos no S3 desse "diretório"
+    const objetos = await listObjectsEmpresaCategoria({
+        tenantId: tId,
+        categoria: 'processos',
+        subpath,
+    }); // esperado: array de { Key, Size, LastModified }
+
+    // helper p/ detectar tipo pelo nome do arquivo
+    const tipoDe = (nome) => {
+        const n = String(nome || '').toUpperCase();
+        if (n.startsWith('CON_') || n.startsWith('CON - ')) return 'Contrato';
+        if (n.startsWith('PRO_') || n.startsWith('PRO - ')) return 'Procuracao';
+        if (n.startsWith('DEC_') || n.startsWith('DEC - ')) return 'Declaracao';
+        if (n.startsWith('FIC_') || n.startsWith('FIC - ')) return 'Ficha';
+        if (n.startsWith('DOC_') || n.startsWith('DOC - ')) return 'Documentacao';
+        if (n.startsWith('PROV_') || n.startsWith('PROV - ')) return 'Provas';
+        if (n.startsWith('ACAO_') || n.startsWith('ACAO - ')) return 'Acao';
+        return 'Outros';
+    };
+
+    const grupos = {
+        Contrato: [], Procuracao: [], Declaracao: [], Ficha: [],
+        Documentacao: [], Provas: [], Acao: [], Outros: []
+    };
+
+    // monta resposta com URL assinada
+    for (const obj of (objetos || [])) {
+        const key = obj.Key || obj.key;
+        if (!key) continue;
+        const nome = key.split('/').pop();
+        const grupo = tipoDe(nome);
+
+        const url = await presignedGetUrl({ key, expiresIn: 3600 });
+        const item = {
+            nome,
+            key,
+            size: obj.Size || obj.size || null,
+            lastModified: obj.LastModified || obj.lastModified || null,
+            url,
+        };
+        if (!grupos[grupo]) grupos.Outros.push(item);
+        else grupos[grupo].push(item);
+    }
+
+    // designado atual (nome)
     let designadoNome = 'Nenhum';
-    if (acao.designado_id) {
-        const u = await getUsuarioById(tId, acao.designado_id);
+    if (meta.designado_id) {
+        const u = await getUsuarioById(tId, meta.designado_id);
         if (u?.nome) designadoNome = u.nome;
     }
 
-    return {
-        Contrato: lista.filter((a) => a.nome.startsWith('CON - ')),
-        Procuracao: lista.filter((a) => a.nome.startsWith('PRO - ')),
-        Declaracao: lista.filter((a) => a.nome.startsWith('DEC - ')),
-        Ficha: lista.filter((a) => a.nome.startsWith('FIC - ')),
-        Documentacao: lista.filter((a) => a.nome.startsWith('DOC - ')),
-        Provas: lista.filter((a) => a.nome.startsWith('PROV - ')),
-        Acao: lista.filter((a) => a.nome.startsWith('ACAO - ')),
-        __designadoAtual: designadoNome,
-    };
+    return { ...grupos, __designadoAtual: designadoNome };
 };
 
-// Salvar comentário
+/* ============================ Comentários / visões ============================ */
+
 exports.salvarComentario = (tenant_id, acaoId, comentario) => {
     const tId = assertTenant(tenant_id);
     return executeQuery(
@@ -415,36 +335,33 @@ exports.obterComentario = async (tenant_id, acaoId) => {
     return rows[0]?.comentario || '';
 };
 
-// Minhas ações (designadas ao usuário logado)
 exports.listarMinhas = (tenant_id, userId) => {
     const tId = assertTenant(tenant_id);
     return executeQuery(
         `
-      SELECT
-        a.id,
-        a.protocolado,
-        c.nome AS cliente,
-        a.titulo,
-        COALESCE(uD.nome, 'Nenhum') AS designado,
-        COALESCE(uC.nome, 'Sistema') AS criador,
-        a.status,
-        a.data_concluido,
-        a.data_aprovado,
-        a.comentario,
-        a.arquivo_path,
-        a.data_criacao
-      FROM acoes a
-      LEFT JOIN clientes c ON c.id = a.cliente_id AND c.tenant_id = a.tenant_id
-      LEFT JOIN usuarios uD ON uD.id = a.designado_id AND uD.tenant_id = a.tenant_id
-      LEFT JOIN usuarios uC ON uC.id = a.criador_id   AND uC.tenant_id = a.tenant_id
-      WHERE a.tenant_id = ? AND a.designado_id = ?
-      ORDER BY a.data_criacao DESC
+    SELECT
+      a.id,
+      a.protocolado,
+      c.nome AS cliente,
+      a.titulo,
+      COALESCE(uD.nome, 'Nenhum') AS designado,
+      COALESCE(uC.nome, 'Sistema') AS criador,
+      a.status,
+      a.data_concluido,
+      a.data_aprovado,
+      a.comentario,
+      a.data_criacao
+    FROM acoes a
+    LEFT JOIN clientes c ON c.id = a.cliente_id AND c.tenant_id = a.tenant_id
+    LEFT JOIN usuarios uD ON uD.id = a.designado_id AND uD.tenant_id = a.tenant_id
+    LEFT JOIN usuarios uC ON uC.id = a.criador_id   AND uC.tenant_id = a.tenant_id
+    WHERE a.tenant_id = ? AND a.designado_id = ?
+    ORDER BY a.data_criacao DESC
     `,
         [tId, userId]
     );
 };
 
-// Atualizar status (restrito ao designado logado)
 exports.atualizarStatusMine = async (tenant_id, acaoId, userId, status) => {
     const tId = assertTenant(tenant_id);
 

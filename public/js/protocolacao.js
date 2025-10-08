@@ -9,12 +9,8 @@ const TENANT_ID = localStorage.getItem('tenant_id') || '1';
 function fetchTenant(url, options = {}) {
     const base = options || {};
     const headers = new Headers(base.headers || {});
-    headers.set('X-Tenant-Id', TENANT_ID);
-    return fetch(url, {
-        credentials: 'same-origin',
-        ...base,
-        headers
-    });
+    headers.set('x-tenant-id', TENANT_ID); // <— minúsculo como no restante do sistema
+    return fetch(url, { credentials: 'same-origin', ...base, headers });
 }
 
 // ----- helpers -----
@@ -153,25 +149,38 @@ async function verArquivos(acaoId, titulo) {
     abrirModalDocumentos(`Documentos da Ação #${acaoId} — ${titulo}`);
 
     try {
-        const res = await fetchTenant(`/api/protocolacao/${acaoId}/arquivos`);
-        const arquivos = await res.json();
+        // usar a MESMA rota do Kanban (já funciona com S3):
+        const res = await fetchTenant(`/api/acoes/arquivos/${acaoId}`);
+        if (!res.ok) {
+            const txt = await res.text().catch(() => '');
+            throw new Error(`Erro ${res.status}: ${txt}`);
+        }
+        const dados = await res.json();
 
-        if (!arquivos || !arquivos.length) {
+        // dados vem agrupado: { Contrato:[], Procuracao:[], ... , __designadoAtual }
+        const categorias = ['Contrato', 'Procuracao', 'Declaracao', 'Ficha', 'Documentacao', 'Provas', 'Acao', 'Outros'];
+        const arquivos = [];
+        categorias.forEach(cat => {
+            (dados?.[cat] || []).forEach(item => {
+                arquivos.push({ nome: item.nome, url: item.url });
+            });
+        });
+
+        if (!arquivos.length) {
             lista.innerHTML = '<div class="modal-docs-empty">Nenhum arquivo encontrado nesta ação.</div>';
             return;
         }
 
         const wrap = document.createElement('div');
         wrap.className = 'modal-docs-arquivos';
-
         arquivos.forEach(a => {
             const card = document.createElement('div');
             card.className = 'modal-docs-arquivo-card';
             card.innerHTML = `
-            <span class="modal-docs-arquivo-icon">📄</span>
-            <span class="modal-docs-arquivo-nome" title="${a.nome}">${a.nome}</span>
-            <a class="modal-docs-arquivo-link" href="${a.url}" target="_blank" rel="noopener" title="Baixar">⬇️ Baixar</a>
-          `;
+        <span class="modal-docs-arquivo-icon">📄</span>
+        <span class="modal-docs-arquivo-nome" title="${a.nome}">${a.nome}</span>
+        <a class="modal-docs-arquivo-link" href="${a.url}" target="_blank" rel="noopener" title="Baixar">⬇️ Baixar</a>
+      `;
             wrap.appendChild(card);
         });
 
@@ -182,6 +191,7 @@ async function verArquivos(acaoId, titulo) {
         lista.innerHTML = '<div class="modal-docs-empty">Erro ao carregar os arquivos.</div>';
     }
 }
+
 
 // ----- Filtros -----
 document.getElementById('btnFiltrar').addEventListener('click', () => {

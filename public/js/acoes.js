@@ -3,33 +3,62 @@
  * ----------------------------------------
  * Frontend de Ações (Kanban) — SaaS multi-tenant.
  *
- * - Envia sempre o cabeçalho `x-tenant-id` (lido do cookie `tenant_id`)
- * - Carrega Kanban (acompanhar / corrigir)
+ * - Envia sempre o cabeçalho `x-tenant-id` (cookie `tenant_id`)
+ * - Kanban: acompanhar/corrigir
  * - Criação de ação com múltiplos uploads
  * - Modal de arquivos + mudança de status/designado/complexidade
- * - Máscaras e UX de uploads
+ * - Defensivo contra falhas da API (ex.: 500 em /api/acoes/arquivos/:id)
  */
 
 /* ===================== Tenant helpers ===================== */
 function getCookie(name) {
-    const m = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()[\]\\/+^])/g, '\\$1') + '=([^;]*)'));
-    return m ? decodeURIComponent(m[1]) : null;
+    const prefix = name + '=';
+    const part = document.cookie.split('; ').find(row => row.startsWith(prefix));
+    return part ? decodeURIComponent(part.slice(prefix.length)) : null;
 }
+
+
 function getTenantHeaders() {
     const t = getCookie('tenant_id');
     return { 'x-tenant-id': t || '' };
 }
 
+/* ===================== Utils ===================== */
+async function safeJson(resp) {
+    try { return await resp.json(); } catch { return null; }
+}
+async function safeFetchJson(url, opts = {}) {
+    try {
+        const resp = await fetch(url, opts);
+        if (!resp.ok) return { ok: false, data: await safeJson(resp) };
+        return { ok: true, data: await safeJson(resp) };
+    } catch {
+        return { ok: false, data: null };
+    }
+}
+function byId(id) { return document.getElementById(id); }
+function ensureEl(id) { const el = byId(id); if (!el) throw new Error(`Elemento #${id} não encontrado`); return el; }
+function formatComplexidade(c) {
+    const v = String(c || '').toLowerCase();
+    if (v === 'baixa' || v === 'baixo') return 'Baixa';
+    if (v === 'media' || v === 'média' || v === 'medio' || v === 'médio') return 'Média';
+    if (v === 'alta' || v === 'alto') return 'Alta';
+    return c || 'Baixa';
+}
+
 /* ===================== Abas ===================== */
 function mostrarAba(aba) {
-    document.getElementById('aba-criar').style.display = aba === 'criar' ? 'block' : 'none';
-    document.getElementById('aba-acompanhar').style.display = aba === 'acompanhar' ? 'block' : 'none';
-    document.getElementById('aba-corrigir').style.display = aba === 'corrigir' ? 'block' : 'none';
+    const elCriar = byId('aba-criar');
+    const elAcomp = byId('aba-acompanhar');
+    const elCorrig = byId('aba-corrigir');
+    if (elCriar) elCriar.style.display = (aba === 'criar') ? 'block' : 'none';
+    if (elAcomp) elAcomp.style.display = (aba === 'acompanhar') ? 'block' : 'none';
+    if (elCorrig) elCorrig.style.display = (aba === 'corrigir') ? 'block' : 'none';
 
     document.querySelectorAll('.aba-btn').forEach(btn => btn.classList.remove('ativo'));
-    if (aba === 'criar') document.querySelectorAll('.aba-btn')[0].classList.add('ativo');
-    if (aba === 'acompanhar') document.querySelectorAll('.aba-btn')[1].classList.add('ativo');
-    if (aba === 'corrigir') document.querySelectorAll('.aba-btn')[2].classList.add('ativo');
+    if (aba === 'criar') document.querySelectorAll('.aba-btn')[0]?.classList.add('ativo');
+    if (aba === 'acompanhar') document.querySelectorAll('.aba-btn')[1]?.classList.add('ativo');
+    if (aba === 'corrigir') document.querySelectorAll('.aba-btn')[2]?.classList.add('ativo');
 
     if (aba === 'acompanhar') carregarKanban();
     if (aba === 'corrigir') carregarKanbanCorrigir();
@@ -37,14 +66,19 @@ function mostrarAba(aba) {
 
 /* ===================== Kanban (acompanhar) ===================== */
 async function carregarKanban() {
+    const kanbanBoard = byId('kanbanBoard');
+    if (!kanbanBoard) return;
     try {
-        const response = await fetch('/api/acoes', {
+        const { ok, data } = await safeFetchJson('/api/acoes', {
             headers: { ...getTenantHeaders() },
             credentials: 'same-origin',
         });
-        const acoesPorDesignado = await response.json();
+        if (!ok || !data || typeof data !== 'object') {
+            kanbanBoard.innerHTML = '<p style="text-align:center;color:#dc3545;">Erro ao carregar ações</p>';
+            return;
+        }
 
-        const kanbanBoard = document.getElementById('kanbanBoard');
+        const acoesPorDesignado = data;
         kanbanBoard.innerHTML = '';
 
         const designados = Object.keys(acoesPorDesignado).sort((a, b) => {
@@ -54,12 +88,10 @@ async function carregarKanban() {
         });
 
         let colunasRenderizadas = 0;
-
         designados.forEach(designado => {
             const acoes = acoesPorDesignado[designado] || [];
-            const acoesFiltradas = acoes.filter(a => (a.status || '').toLowerCase() !== 'finalizado'); // ignora finalizados
+            const acoesFiltradas = acoes.filter(a => (a.status || '').toLowerCase() !== 'finalizado');
             if (!acoesFiltradas.length) return;
-
             const coluna = criarColunaKanban(designado, acoesFiltradas);
             kanbanBoard.appendChild(coluna);
             colunasRenderizadas++;
@@ -70,8 +102,7 @@ async function carregarKanban() {
         }
     } catch (error) {
         console.error('Erro ao carregar kanban:', error);
-        document.getElementById('kanbanBoard').innerHTML =
-            '<p style="text-align:center;color:#dc3545;">Erro ao carregar ações</p>';
+        kanbanBoard.innerHTML = '<p style="text-align:center;color:#dc3545;">Erro ao carregar ações</p>';
     }
 }
 
@@ -102,31 +133,22 @@ function criarColunaKanban(designado, acoesFiltradas) {
     return coluna;
 }
 
-function formatComplexidade(c) {
-    const v = String(c || '').toLowerCase();
-    if (v === 'baixa' || v === 'baixo') return 'Baixa';
-    if (v === 'media' || v === 'média' || v === 'medio' || v === 'médio') return 'Média';
-    if (v === 'alta' || v === 'alto') return 'Alta';
-    // já pode vir capitalizada do backend
-    return c || 'Baixa';
-}
-
 function criarCardAcao(acao) {
     const card = document.createElement('div');
     card.className = 'kanban-card';
     card.onclick = () => abrirDetalhesAcao(acao.id);
 
     const statusClass = (acao.status || '').replace(/\s+/g, '-').toLowerCase();
-    const dataFormatada = new Date(acao.data_criacao).toLocaleDateString('pt-BR');
+    const dataFormatada = acao?.data_criacao ? new Date(acao.data_criacao).toLocaleDateString('pt-BR') : '';
 
     card.innerHTML = `
-    <div class="kanban-card-title">${acao.titulo}</div>
-    <div class="kanban-card-cliente">👤 ${acao.cliente}</div>
+    <div class="kanban-card-title">${acao.titulo || ''}</div>
+    <div class="kanban-card-cliente">👤 ${acao.cliente || ''}</div>
     <div class="kanban-card-status status-${statusClass}">
-      ${acao.status} - Nível ${formatComplexidade(acao.complexidade)}
+      ${acao.status || ''} - Nível ${formatComplexidade(acao.complexidade)}
     </div>
     <div class="kanban-card-meta">
-      <span class="kanban-card-criador">Por: ${acao.criador}</span>
+      <span class="kanban-card-criador">Por: ${acao.criador || ''}</span>
       <span class="kanban-card-data">${dataFormatada}</span>
     </div>
   `;
@@ -136,12 +158,19 @@ function criarCardAcao(acao) {
 /* ===================== Modal (acompanhar) ===================== */
 async function abrirDetalhesAcao(acaoId) {
     try {
-        const [respArq, respStatus] = await Promise.all([
-            fetch(`/api/acoes/arquivos/${acaoId}`, { headers: { ...getTenantHeaders() }, credentials: 'same-origin' }),
-            fetch(`/api/acoes/status/${acaoId}`, { headers: { ...getTenantHeaders() }, credentials: 'same-origin' }),
+        const [arquivosResp, statusResp] = await Promise.all([
+            safeFetchJson(`/api/acoes/arquivos/${acaoId}`, { headers: { ...getTenantHeaders() }, credentials: 'same-origin' }),
+            safeFetchJson(`/api/acoes/status/${acaoId}`, { headers: { ...getTenantHeaders() }, credentials: 'same-origin' }),
         ]);
-        const arquivosPorTipo = await respArq.json();
-        const dadosStatus = await respStatus.json();
+
+        // Se a API de arquivos falhar (ex.: 500 do backend), não travamos o modal.
+        const arquivosPorTipo = (arquivosResp.ok && arquivosResp.data) ? arquivosResp.data : {};
+        const dadosStatus = (statusResp.ok && statusResp.data) ? statusResp.data : { status: 'Não iniciado', complexidade: 'baixa' };
+
+        if (!arquivosResp.ok) {
+            console.warn('Falha ao obter arquivos da ação (abrirDetalhesAcao):', arquivosResp);
+        }
+
         mostrarModalDocumentosAcompanhamento(
             acaoId,
             arquivosPorTipo,
@@ -149,22 +178,26 @@ async function abrirDetalhesAcao(acaoId) {
             false,
             dadosStatus.complexidade
         );
-    } catch (_e) {
-        alert('Erro ao buscar arquivos ou status da ação.');
+    } catch (e) {
+        alert('Erro ao buscar dados da ação.');
     }
 }
 
 /* ===================== Kanban (corrigir) ===================== */
 async function carregarKanbanCorrigir() {
+    const kanbanBoard = byId('kanbanBoardCorrigir');
+    if (!kanbanBoard) return;
     try {
-        // Usa status com capitalização exata para coincidir com o backend
-        const response = await fetch('/api/acoes?status=Finalizado', {
+        const { ok, data } = await safeFetchJson('/api/acoes?status=Finalizado', {
             headers: { ...getTenantHeaders() },
             credentials: 'same-origin',
         });
-        const acoesPorDesignado = await response.json();
+        if (!ok || !data || typeof data !== 'object') {
+            kanbanBoard.innerHTML = '<p style="text-align:center;color:#dc3545;">Erro ao carregar ações</p>';
+            return;
+        }
 
-        const kanbanBoard = document.getElementById('kanbanBoardCorrigir');
+        const acoesPorDesignado = data;
         kanbanBoard.innerHTML = '';
 
         const designados = Object.keys(acoesPorDesignado).sort((a, b) => {
@@ -177,7 +210,7 @@ async function carregarKanbanCorrigir() {
 
         designados.forEach(designado => {
             const acoes = acoesPorDesignado[designado] || [];
-            const acoesFiltradas = acoes.filter(acao => !acao.data_aprovado); // ignora já aprovadas
+            const acoesFiltradas = acoes.filter(acao => !acao.data_aprovado);
             if (!acoesFiltradas.length) return;
 
             const coluna = criarColunaKanbanCorrigir(designado, acoesFiltradas);
@@ -186,12 +219,10 @@ async function carregarKanbanCorrigir() {
         });
 
         if (colunasRenderizadas === 0) {
-            kanbanBoard.innerHTML =
-                '<p style="text-align:center;color:#666;grid-column:1/-1;">Nenhuma ação finalizada para corrigir</p>';
+            kanbanBoard.innerHTML = '<p style="text-align:center;color:#666;grid-column:1/-1;">Nenhuma ação finalizada para corrigir</p>';
         }
-    } catch (_e) {
-        document.getElementById('kanbanBoardCorrigir').innerHTML =
-            '<p style="text-align:center;color:#dc3545;">Erro ao carregar ações</p>';
+    } catch {
+        kanbanBoard.innerHTML = '<p style="text-align:center;color:#dc3545;">Erro ao carregar ações</p>';
     }
 }
 
@@ -222,16 +253,16 @@ function criarColunaKanbanCorrigir(designado, acoesFiltradas) {
         card.onclick = () => abrirDetalhesAcaoCorrigir(acao.id);
 
         const statusClass = (acao.status || '').replace(/\s+/g, '-').toLowerCase();
-        const dataFormatada = new Date(acao.data_criacao).toLocaleDateString('pt-BR');
+        const dataFormatada = acao?.data_criacao ? new Date(acao.data_criacao).toLocaleDateString('pt-BR') : '';
 
         card.innerHTML = `
-      <div class="kanban-card-title">${acao.titulo}</div>
-      <div class="kanban-card-cliente">👤 ${acao.cliente}</div>
+      <div class="kanban-card-title">${acao.titulo || ''}</div>
+      <div class="kanban-card-cliente">👤 ${acao.cliente || ''}</div>
       <div class="kanban-card-status status-${statusClass}">
-        ${acao.status} - Nível ${formatComplexidade(acao.complexidade)}
+        ${acao.status || ''} - Nível ${formatComplexidade(acao.complexidade)}
       </div>
       <div class="kanban-card-meta">
-        <span class="kanban-card-criador">Por: ${acao.criador}</span>
+        <span class="kanban-card-criador">Por: ${acao.criador || ''}</span>
         <span class="kanban-card-data">${dataFormatada}</span>
       </div>
     `;
@@ -245,12 +276,18 @@ function criarColunaKanbanCorrigir(designado, acoesFiltradas) {
 
 async function abrirDetalhesAcaoCorrigir(acaoId) {
     try {
-        const [respArq, respStatus] = await Promise.all([
-            fetch(`/api/acoes/arquivos/${acaoId}`, { headers: { ...getTenantHeaders() }, credentials: 'same-origin' }),
-            fetch(`/api/acoes/status/${acaoId}`, { headers: { ...getTenantHeaders() }, credentials: 'same-origin' }),
+        const [arquivosResp, statusResp] = await Promise.all([
+            safeFetchJson(`/api/acoes/arquivos/${acaoId}`, { headers: { ...getTenantHeaders() }, credentials: 'same-origin' }),
+            safeFetchJson(`/api/acoes/status/${acaoId}`, { headers: { ...getTenantHeaders() }, credentials: 'same-origin' }),
         ]);
-        const arquivosPorTipo = await respArq.json();
-        const dadosStatus = await respStatus.json();
+
+        const arquivosPorTipo = (arquivosResp.ok && arquivosResp.data) ? arquivosResp.data : {};
+        const dadosStatus = (statusResp.ok && statusResp.data) ? statusResp.data : { status: 'Finalizado', complexidade: 'baixa' };
+
+        if (!arquivosResp.ok) {
+            console.warn('Falha ao obter arquivos da ação (abrirDetalhesAcaoCorrigir):', arquivosResp);
+        }
+
         mostrarModalDocumentosAcompanhamento(
             acaoId,
             arquivosPorTipo,
@@ -258,21 +295,23 @@ async function abrirDetalhesAcaoCorrigir(acaoId) {
             true,
             dadosStatus.complexidade
         );
-    } catch (_e) {
-        alert('Erro ao buscar arquivos ou status da ação.');
+    } catch {
+        alert('Erro ao buscar dados da ação.');
     }
 }
 
 /* ===================== Modal base (acompanhar/corrigir) ===================== */
 function mostrarModalDocumentosAcompanhamento(acaoId, arquivosPorTipo, statusAtual, modoCorrigir, complexidadeAtual) {
-    const modal = document.getElementById('modalDocumentos');
-    const lista = document.getElementById('modalDocsLista');
+    const modal = ensureEl('modalDocumentos');
+    const lista = ensureEl('modalDocsLista');
+    const modalContent = document.querySelector('.modal-docs-content');
+    if (!modalContent) return;
+
     lista.innerHTML = '';
 
-    const modalContent = document.querySelector('.modal-docs-content');
-    let headerRow = document.getElementById('modalDocsHeaderRow');
+    // Header
+    let headerRow = byId('modalDocsHeaderRow');
     if (headerRow) headerRow.remove();
-
     headerRow = document.createElement('div');
     headerRow.id = 'modalDocsHeaderRow';
     headerRow.style.display = 'flex';
@@ -282,7 +321,7 @@ function mostrarModalDocumentosAcompanhamento(acaoId, arquivosPorTipo, statusAtu
     headerRow.style.marginBottom = '1.2rem';
     headerRow.innerHTML = `
     <h3 style='margin:0;color:#4953b8;font-size:1.25rem;font-weight:600;'>Documentos da Ação</h3>
-    <div style='display:flex;align-items:center;gap:1rem;'>
+    <div style='display:flex;align-items:center;gap:1rem;flex-wrap:wrap;'>
       <span style="font-size:1.1rem;font-weight:600;color:#4953b8;">Designado:</span>
       <select id="modalDesignadoSelect" style="padding:0.4rem 1rem;border-radius:6px;font-size:1rem;min-width:120px;"></select>
 
@@ -310,34 +349,32 @@ function mostrarModalDocumentosAcompanhamento(acaoId, arquivosPorTipo, statusAtu
     modalContent.insertBefore(headerRow, modalContent.querySelector('#modalDocsLista'));
 
     // Comentário do revisor (somente acompanhar)
-    let comentarioInfo = document.getElementById('modalComentarioInfo');
+    let comentarioInfo = byId('modalComentarioInfo');
     if (comentarioInfo) comentarioInfo.remove();
     if (!modoCorrigir) {
-        fetch(`/api/acoes/comentario/${acaoId}`, {
+        safeFetchJson(`/api/acoes/comentario/${acaoId}`, {
             headers: { ...getTenantHeaders() },
             credentials: 'same-origin',
-        })
-            .then(r => r.json())
-            .then(data => {
-                if (data.comentario) {
-                    comentarioInfo = document.createElement('div');
-                    comentarioInfo.id = 'modalComentarioInfo';
-                    comentarioInfo.style.width = '100%';
-                    comentarioInfo.style.background = '#fffbe6';
-                    comentarioInfo.style.border = '1.5px solid #ffe066';
-                    comentarioInfo.style.borderRadius = '7px';
-                    comentarioInfo.style.padding = '1rem';
-                    comentarioInfo.style.marginBottom = '1rem';
-                    comentarioInfo.style.color = '#856404';
-                    comentarioInfo.style.fontWeight = '500';
-                    comentarioInfo.innerHTML = `<span style='font-size:1.08em;'>📝 <b>Comentário do revisor:</b><br>${data.comentario}</span>`;
-                    modalContent.insertBefore(comentarioInfo, modalContent.querySelector('#modalDocsLista'));
-                }
-            });
+        }).then(({ ok, data }) => {
+            if (ok && data?.comentario) {
+                comentarioInfo = document.createElement('div');
+                comentarioInfo.id = 'modalComentarioInfo';
+                comentarioInfo.style.width = '100%';
+                comentarioInfo.style.background = '#fffbe6';
+                comentarioInfo.style.border = '1.5px solid #ffe066';
+                comentarioInfo.style.borderRadius = '7px';
+                comentarioInfo.style.padding = '1rem';
+                comentarioInfo.style.marginBottom = '1rem';
+                comentarioInfo.style.color = '#856404';
+                comentarioInfo.style.fontWeight = '500';
+                comentarioInfo.innerHTML = `<span style='font-size:1.08em;'>📝 <b>Comentário do revisor:</b><br>${data.comentario}</span>`;
+                modalContent.insertBefore(comentarioInfo, modalContent.querySelector('#modalDocsLista'));
+            }
+        });
     }
 
-    // Caixa de comentário (somente corrigir, quando devolvendo)
-    let comentarioBox = document.getElementById('modalComentarioBox');
+    // Caixa de comentário (somente corrigir)
+    let comentarioBox = byId('modalComentarioBox');
     if (comentarioBox) comentarioBox.remove();
     if (modoCorrigir) {
         comentarioBox = document.createElement('div');
@@ -352,121 +389,133 @@ function mostrarModalDocumentosAcompanhamento(acaoId, arquivosPorTipo, statusAtu
         modalContent.insertBefore(comentarioBox, modalContent.querySelector('#modalDocsLista'));
     }
 
-    // Preenche designados (nomes — updateStatus espera o nome no backend)
-    fetch('/api/usuarios/designados', { headers: { ...getTenantHeaders() }, credentials: 'same-origin' })
-        .then(r => r.json())
-        .then(designados => {
-            const select = document.getElementById('modalDesignadoSelect');
+    // Preenche designados
+    safeFetchJson('/api/usuarios/designados', { headers: { ...getTenantHeaders() }, credentials: 'same-origin' })
+        .then(({ ok, data }) => {
+            const select = byId('modalDesignadoSelect');
+            if (!select) return;
             select.innerHTML = '<option value="Nenhum">Nenhum</option>';
-            designados.forEach(e => {
-                const opt = document.createElement('option');
-                opt.value = e.nome;
-                opt.textContent = e.nome;
-                select.appendChild(opt);
-            });
+            if (ok && Array.isArray(data)) {
+                data.forEach(e => {
+                    const opt = document.createElement('option');
+                    opt.value = e.nome; // updateStatus espera NOME no backend
+                    opt.textContent = e.nome;
+                    select.appendChild(opt);
+                });
+            }
             select.value = window.__modalDesignadoAtual || 'Nenhum';
         });
 
+    // Preenche status/complexidade atuais
     setTimeout(() => {
-        document.getElementById('modalStatusSelect').value = statusAtual || 'Não iniciado';
-        const selComp = document.getElementById('modalComplexidadeSelect');
+        const selStatus = byId('modalStatusSelect');
+        if (selStatus) selStatus.value = statusAtual || 'Não iniciado';
+        const selComp = byId('modalComplexidadeSelect');
         if (selComp) selComp.value = (String(complexidadeAtual || 'baixa')).toLowerCase();
     }, 50);
 
     // Salvar (status/designado/complexidade + uploads)
-    document.getElementById('modalStatusSalvar').onclick = async () => {
-        const novoStatus = document.getElementById('modalStatusSelect').value;
-        const novoDesignado = document.getElementById('modalDesignadoSelect').value;
-        const novaComplexidade = document.getElementById('modalComplexidadeSelect').value;
-        const msg = document.getElementById('modalStatusMsg');
-        msg.textContent = 'Salvando...';
+    const salvarBtn = byId('modalStatusSalvar');
+    if (salvarBtn) {
+        salvarBtn.onclick = async () => {
+            const novoStatus = byId('modalStatusSelect')?.value || 'Não iniciado';
+            const novoDesignado = byId('modalDesignadoSelect')?.value || 'Nenhum';
+            const novaComplexidade = byId('modalComplexidadeSelect')?.value || 'baixa';
+            const msg = byId('modalStatusMsg');
+            if (msg) msg.textContent = 'Salvando...';
 
-        // se estiver em correção e tirando de Finalizado → exige comentário
-        if (modoCorrigir && statusAtual === 'Finalizado' && novoStatus !== 'Finalizado') {
-            const comentario = (document.getElementById('modalComentario')?.value || '').trim();
-            if (!comentario) {
-                msg.textContent = 'Por favor, escreva um comentário para devolução.';
-                return;
+            // Em modo corrigir: se tirar de Finalizado, exige comentário
+            if (modoCorrigir && statusAtual === 'Finalizado' && novoStatus !== 'Finalizado') {
+                const comentario = (byId('modalComentario')?.value || '').trim();
+                if (!comentario) {
+                    if (msg) msg.textContent = 'Por favor, escreva um comentário para devolução.';
+                    return;
+                }
+                const rComent = await safeFetchJson(`/api/acoes/comentario/${acaoId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', ...getTenantHeaders() },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ comentario }),
+                });
+                if (!rComent.ok) {
+                    if (msg) msg.textContent = 'Erro ao salvar comentário.';
+                    return;
+                }
             }
-            const respComentario = await fetch(`/api/acoes/comentario/${acaoId}`, {
-                method: 'POST',
+
+            // Salva status/designado/complexidade
+            const rStatus = await safeFetchJson(`/api/acoes/status/${acaoId}`, {
+                method: 'PUT',
                 headers: { 'Content-Type': 'application/json', ...getTenantHeaders() },
                 credentials: 'same-origin',
-                body: JSON.stringify({ comentario }),
+                body: JSON.stringify({ status: novoStatus, designado: novoDesignado, complexidade: novaComplexidade }),
             });
-            if (!respComentario.ok) {
-                msg.textContent = 'Erro ao salvar comentário.';
-                return;
+
+            // Uploads (somente se preenchidos)
+            const tiposUpload = [
+                { campo: 'modalContratoUpload', rota: '/api/acoes/upload-contrato' },
+                { campo: 'modalProcuracaoUpload', rota: '/api/acoes/upload-procuracao' },
+                { campo: 'modalDeclaracaoUpload', rota: '/api/acoes/upload-declaracao' },
+                { campo: 'modalFichaUpload', rota: '/api/acoes/upload-ficha' },
+                { campo: 'modalDocumentacaoUpload', rota: '/api/acoes/upload-documentacao' },
+                { campo: 'modalProvasUpload', rota: '/api/acoes/upload-provas' },
+                { campo: 'modalAcaoUpload', rota: '/api/acoes/upload-acao' },
+            ];
+
+            let uploadsOK = true;
+            for (const tipo of tiposUpload) {
+                const input = byId(tipo.campo);
+                if (input && input.files && input.files.length) {
+                    const formData = new FormData();
+                    formData.append('acao_id', acaoId);
+                    formData.append('arquivo', input.files[0]);
+                    const rArq = await safeFetchJson(tipo.rota, {
+                        method: 'POST',
+                        headers: { ...getTenantHeaders() },
+                        credentials: 'same-origin',
+                        body: formData,
+                    });
+                    uploadsOK = uploadsOK && rArq.ok;
+                }
             }
-        }
 
-        // Salva status/designado/complexidade
-        const resp = await fetch(`/api/acoes/status/${acaoId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', ...getTenantHeaders() },
-            credentials: 'same-origin',
-            body: JSON.stringify({ status: novoStatus, designado: novoDesignado, complexidade: novaComplexidade }),
-        });
-        const statusOk = resp.ok;
-
-        // Uploads (somente se preenchidos)
-        const tiposUpload = [
-            { campo: 'modalContratoUpload', rota: '/api/acoes/upload-contrato' },
-            { campo: 'modalProcuracaoUpload', rota: '/api/acoes/upload-procuracao' },
-            { campo: 'modalDeclaracaoUpload', rota: '/api/acoes/upload-declaracao' },
-            { campo: 'modalFichaUpload', rota: '/api/acoes/upload-ficha' },
-            { campo: 'modalDocumentacaoUpload', rota: '/api/acoes/upload-documentacao' },
-            { campo: 'modalProvasUpload', rota: '/api/acoes/upload-provas' },
-            { campo: 'modalAcaoUpload', rota: '/api/acoes/upload-acao' },
-        ];
-        let arquivoOk = true;
-        for (const tipo of tiposUpload) {
-            const input = document.getElementById(tipo.campo);
-            if (input && input.files && input.files.length) {
-                const formData = new FormData();
-                formData.append('acao_id', acaoId);
-                formData.append('arquivo', input.files[0]);
-                const respArq = await fetch(tipo.rota, {
-                    method: 'POST',
-                    headers: { ...getTenantHeaders() },
-                    credentials: 'same-origin',
-                    body: formData,
-                });
-                arquivoOk = arquivoOk && respArq.ok;
-            }
-        }
-
-        if (statusOk && arquivoOk) {
-            msg.textContent = 'Salvo!';
-            document.getElementById('modalDocumentos').style.display = 'none';
-            setTimeout(() => { msg.textContent = ''; }, 1200);
-            if (modoCorrigir) carregarKanbanCorrigir(); else carregarKanban();
-        } else {
-            msg.textContent = 'Erro ao salvar';
-        }
-    };
-
-    if (modoCorrigir) {
-        document.getElementById('modalAprovar').onclick = async () => {
-            const msg = document.getElementById('modalStatusMsg');
-            msg.textContent = 'Aprovando...';
-            const resp = await fetch(`/api/acoes/aprovar/${acaoId}`, {
-                method: 'POST',
-                headers: { ...getTenantHeaders() },
-                credentials: 'same-origin',
-            });
-            if (resp.ok) {
-                msg.textContent = 'Aprovado!';
-                document.getElementById('modalDocumentos').style.display = 'none';
-                setTimeout(() => { msg.textContent = ''; }, 1200);
-                carregarKanbanCorrigir();
+            if (rStatus.ok && uploadsOK) {
+                if (msg) msg.textContent = 'Salvo!';
+                const modalEl = byId('modalDocumentos');
+                if (modalEl) modalEl.style.display = 'none';
+                setTimeout(() => { if (msg) msg.textContent = ''; }, 1200);
+                if (modoCorrigir) carregarKanbanCorrigir(); else carregarKanban();
             } else {
-                msg.textContent = 'Erro ao aprovar';
+                if (msg) msg.textContent = 'Erro ao salvar';
             }
         };
     }
 
-    // Designado atual (para preencher select ao abrir)
+    if (modoCorrigir) {
+        const aprovarBtn = byId('modalAprovar');
+        if (aprovarBtn) {
+            aprovarBtn.onclick = async () => {
+                const msg = byId('modalStatusMsg');
+                if (msg) msg.textContent = 'Aprovando...';
+                const r = await safeFetchJson(`/api/acoes/aprovar/${acaoId}`, {
+                    method: 'POST',
+                    headers: { ...getTenantHeaders() },
+                    credentials: 'same-origin',
+                });
+                if (r.ok) {
+                    if (msg) msg.textContent = 'Aprovado!';
+                    const modalEl = byId('modalDocumentos');
+                    if (modalEl) modalEl.style.display = 'none';
+                    setTimeout(() => { if (msg) msg.textContent = ''; }, 1200);
+                    carregarKanbanCorrigir();
+                } else {
+                    if (msg) msg.textContent = 'Erro ao aprovar';
+                }
+            };
+        }
+    }
+
+    // Designado atual (para fill do select ao abrir)
     window.__modalDesignadoAtual = arquivosPorTipo?.__designadoAtual || 'Nenhum';
 
     // Monta blocos por tipo
@@ -489,6 +538,7 @@ function mostrarModalDocumentosAcompanhamento(acaoId, arquivosPorTipo, statusAtu
         bloco.innerHTML = `<div class='modal-docs-bloco-titulo'>${titulo}</div>`;
 
         // Upload inline quando não há arquivo
+        if (!Array.isArray(listaArqs)) listaArqs = [];
         if (listaArqs.length === 0) {
             const tipoCampo =
                 titulo === 'Contrato' ? 'modalContratoUpload' :
@@ -511,9 +561,9 @@ function mostrarModalDocumentosAcompanhamento(acaoId, arquivosPorTipo, statusAtu
 
             const input = uploadDrop.querySelector(`#${tipoCampo}`);
             const nomeSpan = uploadDrop.querySelector(`#${tipoCampo}Nome`);
-            uploadDrop.onclick = () => input.click();
-            input.addEventListener('change', () => {
-                nomeSpan.textContent = input.files.length ? input.files[0].name : '';
+            uploadDrop.onclick = () => input?.click();
+            input?.addEventListener('change', () => {
+                if (nomeSpan) nomeSpan.textContent = input.files.length ? input.files[0].name : '';
             });
             uploadDrop.addEventListener('dragover', e => { e.preventDefault(); uploadDrop.classList.add('dragover'); });
             uploadDrop.addEventListener('dragleave', () => uploadDrop.classList.remove('dragover'));
@@ -521,8 +571,10 @@ function mostrarModalDocumentosAcompanhamento(acaoId, arquivosPorTipo, statusAtu
                 e.preventDefault();
                 uploadDrop.classList.remove('dragover');
                 if (e.dataTransfer.files?.length) {
-                    input.files = e.dataTransfer.files;
-                    nomeSpan.textContent = input.files[0].name;
+                    if (input) {
+                        input.files = e.dataTransfer.files;
+                        if (nomeSpan) nomeSpan.textContent = input.files[0].name;
+                    }
                 }
             });
         }
@@ -530,36 +582,39 @@ function mostrarModalDocumentosAcompanhamento(acaoId, arquivosPorTipo, statusAtu
         // Lista de arquivos já existentes
         const arqsDiv = document.createElement('div');
         arqsDiv.className = 'modal-docs-arquivos';
-        if (!listaArqs.length) {
+        if (listaArqs.length === 0) {
             arqsDiv.innerHTML = `<div style='color:#888'>Nenhum arquivo.</div>`;
         } else {
             listaArqs.forEach(arq => {
                 const card = document.createElement('div');
                 card.className = 'modal-docs-arquivo-card';
-                const nomeBase = String(arq.nome || '').replace(/^(CON|DEC|PRO|FIC|DOC|PROV|ACAO)\s*-\s*/, '');
+                const nomeBase = String(arq?.nome || '').replace(/^(CON|DEC|PRO|FIC|DOC|PROV|ACAO)\s*-\s*/, '');
                 const nomeCurto = nomeBase.length > 18 ? nomeBase.slice(0, 18) + '…' : nomeBase;
+                const linkPath = (arq?.path || '').replace(/^.*public/, '') || '#';
 
                 card.innerHTML = `
           <span class="modal-docs-arquivo-icon">📄</span>
-          <span class="modal-docs-arquivo-nome" title="${arq.nome}">${nomeCurto}</span>
-          <a class="modal-docs-arquivo-link" href="${(arq.path || '').replace(/^.*public/, '')}" target="_blank" title="Baixar ${arq.nome}">⬇️</a>
+          <span class="modal-docs-arquivo-nome" title="${arq?.nome || ''}">${nomeCurto}</span>
+          <a class="modal-docs-arquivo-link" href="${linkPath}" target="_blank" title="Baixar ${arq?.nome || ''}">⬇️</a>
           <button class="modal-docs-arquivo-remove" title="Excluir" style="margin-left:0.7rem;color:#e53e3e;background:none;border:none;font-size:1.2em;cursor:pointer;font-weight:bold;">×</button>
         `;
 
-                card.querySelector('.modal-docs-arquivo-remove').onclick = async (ev) => {
+                card.querySelector('.modal-docs-arquivo-remove')?.addEventListener('click', async (ev) => {
                     ev.stopPropagation();
                     if (!confirm('Tem certeza que deseja excluir este arquivo?')) return;
-                    const resp = await fetch('/api/acoes/remover-arquivo', {
+                    const r = await safeFetchJson('/api/acoes/remover-arquivo', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', ...getTenantHeaders() },
                         credentials: 'same-origin',
-                        body: JSON.stringify({ acaoId, nomeArquivo: arq.nome }),
+                        body: JSON.stringify({ acaoId, nomeArquivo: arq?.nome }),
                     });
-                    if (resp.ok) {
+                    if (r.ok) {
                         if (modoCorrigir) abrirDetalhesAcaoCorrigir(acaoId);
                         else abrirDetalhesAcao(acaoId);
+                    } else {
+                        alert('Erro ao excluir arquivo.');
                     }
-                };
+                });
 
                 arqsDiv.appendChild(card);
             });
@@ -570,140 +625,167 @@ function mostrarModalDocumentosAcompanhamento(acaoId, arquivosPorTipo, statusAtu
     });
 
     lista.appendChild(blocos);
+
+    // Aviso se arquivos vieram vazios por erro no backend
+    if (!arquivosPorTipo || Object.keys(arquivosPorTipo).length === 0) {
+        const warn = document.createElement('div');
+        warn.style.marginTop = '8px';
+        warn.style.color = '#b7791f';
+        warn.style.fontSize = '.95rem';
+        warn.textContent = 'Não foi possível listar arquivos agora. Você ainda pode alterar status/designado/complexidade e enviar novos arquivos.';
+        lista.appendChild(warn);
+    }
+
     modal.style.display = 'flex';
 }
 
 function fecharModalDocumentos() {
-    document.getElementById('modalDocumentos').style.display = 'none';
+    const modal = byId('modalDocumentos');
+    if (modal) modal.style.display = 'none';
 }
 
 /* ===================== Formulário de criação ===================== */
 async function carregarOpcoes() {
     // Clientes
-    const clientes = await fetch('/api/clientes', { headers: { ...getTenantHeaders() }, credentials: 'same-origin' })
-        .then(r => r.json()).catch(() => []);
-    const selectCliente = document.getElementById('cliente');
-    clientes.forEach(c => {
-        const opt = document.createElement('option');
-        opt.value = c.id;
-        opt.textContent = `${c.nome} - ${c.cpf_cnpj}`;
-        selectCliente.appendChild(opt);
-    });
+    const rCli = await safeFetchJson('/api/clientes', { headers: { ...getTenantHeaders() }, credentials: 'same-origin' });
+    const clientes = Array.isArray(rCli.data) ? rCli.data : [];
+    const selectCliente = byId('cliente');
+    if (selectCliente) {
+        clientes.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.id;
+            opt.textContent = `${c.nome} - ${c.cpf_cnpj}`;
+            selectCliente.appendChild(opt);
+        });
+    }
 
     // Designados
-    const designados = await fetch('/api/usuarios/designados', { headers: { ...getTenantHeaders() }, credentials: 'same-origin' })
-        .then(r => r.json()).catch(() => []);
-    const selectdesignado = document.getElementById('designado');
-    designados.forEach(e => {
-        const opt = document.createElement('option');
-        opt.value = e.id; // criação usa id; backend resolve nome/id
-        opt.textContent = e.nome;
-        selectdesignado.appendChild(opt);
-    });
-}
-carregarOpcoes();
-
-document.getElementById('formAcao').addEventListener('submit', async function (e) {
-    e.preventDefault();
-    const formData = new FormData();
-
-    formData.append('cliente_id', document.getElementById('cliente').value);
-    formData.append('designado_id', document.getElementById('designado').value);
-    formData.append('status', 'Não iniciado');
-    formData.append('complexidade', document.getElementById('complexidade').value);
-    formData.append('titulo', document.getElementById('titulo').value);
-
-    // arquivos
-    ['contratoArquivo', 'procuracaoArquivo', 'declaracaoArquivo', 'fichaArquivo', 'documentacaoArquivo', 'provasArquivo']
-        .forEach(campo => {
-            const files = document.getElementById(campo).files;
-            for (let i = 0; i < files.length; i++) formData.append(campo, files[i]);
-        });
-
-    const resp = await fetch('/api/acoes', {
-        method: 'POST',
-        headers: { ...getTenantHeaders() },
-        credentials: 'same-origin',
-        body: formData,
-    });
-    const data = await resp.json();
-
-    if (resp.ok) {
-        this.reset();
-        ['contratoArquivoLista', 'procuracaoArquivoLista', 'declaracaoArquivoLista', 'fichaArquivoLista', 'documentacaoArquivoLista', 'provasArquivoLista']
-            .forEach(id => (document.getElementById(id).innerHTML = ''));
-        mostrarPopupAcaoCriada(data.mensagem || 'Ação criada com sucesso!');
-    } else {
-        const mensagem = document.getElementById('mensagem');
-        mensagem.textContent = data.mensagem || 'Erro ao criar ação';
-        mensagem.style.color = '#dc3545';
-    }
-});
-
-// limpa mensagem ao submeter
-const form = document.getElementById('formAcao');
-const mensagem = document.getElementById('mensagem');
-form.addEventListener('submit', function () { mensagem.textContent = ''; });
-
-/* ===================== Uploads: listas e DnD ===================== */
-function atualizarListaArquivos(inputId, listaId) {
-    const input = document.getElementById(inputId);
-    const lista = document.getElementById(listaId);
-    lista.innerHTML = '';
-    if (input.files?.length) {
-        Array.from(input.files).forEach((file, idx) => {
-            const item = document.createElement('div');
-            item.className = 'file-list-item';
-            item.innerHTML = `<span>${file.name}</span><button type="button" class="remove-file" title="Remover" data-idx="${idx}">×</button>`;
-            lista.appendChild(item);
-        });
-        lista.querySelectorAll('.remove-file').forEach(btn => {
-            btn.onclick = (e) => {
-                e.stopPropagation();
-                removerArquivo(inputId, parseInt(btn.getAttribute('data-idx'), 10));
-            };
+    const rDes = await safeFetchJson('/api/usuarios/designados', { headers: { ...getTenantHeaders() }, credentials: 'same-origin' });
+    const designados = Array.isArray(rDes.data) ? rDes.data : [];
+    const selectdesignado = byId('designado');
+    if (selectdesignado) {
+        designados.forEach(e => {
+            const opt = document.createElement('option');
+            opt.value = e.id; // criação usa id; backend resolve nome/id
+            opt.textContent = e.nome;
+            selectdesignado.appendChild(opt);
         });
     }
 }
-function removerArquivo(inputId, idx) {
-    const input = document.getElementById(inputId);
-    const dt = new DataTransfer();
-    Array.from(input.files).forEach((file, i) => { if (i !== idx) dt.items.add(file); });
-    input.files = dt.files;
-    atualizarListaArquivos(inputId, inputId + 'Lista');
-}
 
-['contratoArquivo', 'procuracaoArquivo', 'declaracaoArquivo', 'fichaArquivo', 'documentacaoArquivo', 'provasArquivo'].forEach(id => {
-    document.getElementById(id).addEventListener('change', () => atualizarListaArquivos(id, id + 'Lista'));
-});
+// somar listeners apenas quando os elementos existem
+document.addEventListener('DOMContentLoaded', () => {
+    carregarOpcoes();
 
-function setupDrop(dropId, inputId) {
-    const drop = document.getElementById(dropId);
-    const input = document.getElementById(inputId);
-    drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('dragover'); });
-    drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
-    drop.addEventListener('drop', (e) => {
-        e.preventDefault();
-        drop.classList.remove('dragover');
-        if (e.dataTransfer.files?.length) {
-            const dt = new DataTransfer();
-            Array.from(input.files).forEach(f => dt.items.add(f));
-            Array.from(e.dataTransfer.files).forEach(f => dt.items.add(f));
-            input.files = dt.files;
-            atualizarListaArquivos(inputId, inputId + 'Lista');
+    const form = byId('formAcao');
+    const mensagem = byId('mensagem');
+
+    if (form) {
+        form.addEventListener('submit', async function (e) {
+            e.preventDefault();
+            if (mensagem) mensagem.textContent = '';
+
+            const formData = new FormData();
+            formData.append('cliente_id', byId('cliente')?.value || '');
+            formData.append('designado_id', byId('designado')?.value || '');
+            formData.append('status', 'Não iniciado');
+            formData.append('complexidade', byId('complexidade')?.value || 'baixa');
+            formData.append('titulo', byId('titulo')?.value || '');
+
+            // arquivos
+            ['contratoArquivo', 'procuracaoArquivo', 'declaracaoArquivo', 'fichaArquivo', 'documentacaoArquivo', 'provasArquivo']
+                .forEach(campo => {
+                    const input = byId(campo);
+                    if (input?.files?.length) {
+                        Array.from(input.files).forEach(f => formData.append(campo, f));
+                    }
+                });
+
+            const r = await safeFetchJson('/api/acoes', {
+                method: 'POST',
+                headers: { ...getTenantHeaders() },
+                credentials: 'same-origin',
+                body: formData,
+            });
+
+            if (r.ok) {
+                this.reset();
+                ['contratoArquivoLista', 'procuracaoArquivoLista', 'declaracaoArquivoLista', 'fichaArquivoLista', 'documentacaoArquivoLista', 'provasArquivoLista']
+                    .forEach(id => { const el = byId(id); if (el) el.innerHTML = ''; });
+                mostrarPopupAcaoCriada((r.data && r.data.mensagem) || 'Ação criada com sucesso!');
+            } else {
+                if (mensagem) {
+                    mensagem.textContent = (r.data && r.data.mensagem) || 'Erro ao criar ação';
+                    mensagem.style.color = '#dc3545';
+                }
+            }
+        });
+    }
+
+    // Uploads: listas e DnD
+    function atualizarListaArquivos(inputId, listaId) {
+        const input = byId(inputId);
+        const lista = byId(listaId);
+        if (!input || !lista) return;
+        lista.innerHTML = '';
+        if (input.files?.length) {
+            Array.from(input.files).forEach((file, idx) => {
+                const item = document.createElement('div');
+                item.className = 'file-list-item';
+                item.innerHTML = `<span>${file.name}</span><button type="button" class="remove-file" title="Remover" data-idx="${idx}">×</button>`;
+                lista.appendChild(item);
+            });
+            lista.querySelectorAll('.remove-file').forEach(btn => {
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    removerArquivo(inputId, parseInt(btn.getAttribute('data-idx'), 10));
+                };
+            });
         }
+    }
+    function removerArquivo(inputId, idx) {
+        const input = byId(inputId);
+        if (!input || !input.files) return;
+        const dt = new DataTransfer();
+        Array.from(input.files).forEach((file, i) => { if (i !== idx) dt.items.add(file); });
+        input.files = dt.files;
+        atualizarListaArquivos(inputId, inputId + 'Lista');
+    }
+
+    ['contratoArquivo', 'procuracaoArquivo', 'declaracaoArquivo', 'fichaArquivo', 'documentacaoArquivo', 'provasArquivo'].forEach(id => {
+        const el = byId(id);
+        if (el) el.addEventListener('change', () => atualizarListaArquivos(id, id + 'Lista'));
     });
-}
-setupDrop('drop-contrato', 'contratoArquivo');
-setupDrop('drop-procuracao', 'procuracaoArquivo');
-setupDrop('drop-declaracao', 'declaracaoArquivo');
-setupDrop('drop-ficha', 'fichaArquivo');
-setupDrop('drop-documentacao', 'documentacaoArquivo');
-setupDrop('drop-provas', 'provasArquivo');
+
+    function setupDrop(dropId, inputId) {
+        const drop = byId(dropId);
+        const input = byId(inputId);
+        if (!drop || !input) return;
+        drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('dragover'); });
+        drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
+        drop.addEventListener('drop', (e) => {
+            e.preventDefault();
+            drop.classList.remove('dragover');
+            if (e.dataTransfer.files?.length) {
+                const dt = new DataTransfer();
+                Array.from(input.files || []).forEach(f => dt.items.add(f));
+                Array.from(e.dataTransfer.files).forEach(f => dt.items.add(f));
+                input.files = dt.files;
+                atualizarListaArquivos(inputId, inputId + 'Lista');
+            }
+        });
+    }
+    setupDrop('drop-contrato', 'contratoArquivo');
+    setupDrop('drop-procuracao', 'procuracaoArquivo');
+    setupDrop('drop-declaracao', 'declaracaoArquivo');
+    setupDrop('drop-ficha', 'fichaArquivo');
+    setupDrop('drop-documentacao', 'documentacaoArquivo');
+    setupDrop('drop-provas', 'provasArquivo');
+});
 
 /* ===================== Toast ===================== */
 function mostrarPopupAcaoCriada(msg) {
-    let container = document.getElementById('toastContainer');
+    let container = byId('toastContainer');
     if (!container) {
         container = document.createElement('div');
         container.id = 'toastContainer';

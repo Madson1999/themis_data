@@ -70,6 +70,8 @@ app.use('/', adminRoutes); // /administrador e /api/admin/*
 
 /* ---------- API multi-tenant (/api/*) ---------- */
 app.use('/api', apiRoutes);
+app.use('/api', require('./routes/uploads.routes'));
+
 
 /* ---------- Debug de modelos DOCX ---------- */
 // app.use('/debug', debugDocxRoutes); // REMOVIDO

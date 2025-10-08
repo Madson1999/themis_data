@@ -1,10 +1,51 @@
-/* ========================================================================
-* KANBAN – Lado do cliente (cards, drag & drop e modal de arquivos)
-* Padrões de comentário:
-*   - Cabeçalho da seção:  ====== SEÇÃO ======
-*   - Cabeçalho de função: /** Função: o que faz  *\/
-*   - Comentários de linha: // Explicação curta
-* ===================================================================== */
+/**
+ * public/js/kanban.js
+ * ----------------------------------------
+ * Kanban do módulo Ações — SaaS multi-tenant.
+ *
+ * RESUMO
+ * - Renderiza cards por status: "Não iniciado", "Em andamento", "Finalizado".
+ * - Oculta ações com status "Aprovado" (não aparecem no board).
+ * - Atualização em tempo real sem F5 (polling 5s + sync ao ganhar foco).
+ * - Drag & Drop com persistência (PATCH /api/acoes/:id/status).
+ * - Modal de arquivos (listar, baixar, upload com progresso, excluir quando permitido).
+ * - Todas as requisições enviam o cabeçalho X-Tenant-Id.
+ *
+ * CONVENÇÕES DE COMENTÁRIO
+ * - Seções:        ====== NOME DA SEÇÃO ======
+ * - Funções:       /** Função: descrição sucinta *\/
+ * - Comentários:   // explicação curta
+ *
+ * DEPENDÊNCIAS DE DOM
+ * - Template:      #tpl-card
+ * - Colunas:       #col-nao-iniciado, #col-andamento, #col-finalizado
+ * - Modal:         #modal-backdrop, #modal-title, #modal-close,
+ *                  #upload-area, #file-input, #upload-progress (div>div), #file-list
+ *
+ * ENDPOINTS UTILIZADOS
+ * - GET    /api/acoes/mine                 -> listar ações do usuário
+ * - PATCH  /api/acoes/:id/status           -> alterar status da ação
+ * - GET    /api/acoes/:id                  -> detalhes (comentário)
+ * - GET    /api/acoes/detalhes/:id         -> fallback de detalhes (comentário)
+ * - GET    /api/acoes/arquivos/:id         -> listar arquivos por grupos
+ * - POST   /api/acoes/upload-acao          -> upload (FormData/XHR + progresso)
+ * - POST   /api/acoes/remover-arquivo      -> remover arquivo (apenas "ACAO - *")
+ *
+ * REGRAS DE UI
+ * - "Finalizado": somente leitura (sem drag; upload desabilitado).
+ * - "Aprovado": oculto no board (hidden).
+ * - Reconciliação incremental: adiciona/atualiza/remove cards sem recarregar.
+ *
+ * REALTIME
+ * - Polling: 5000 ms (ajustável) + sincronização imediata ao focar a aba.
+ * - Hook preparado para SSE (/api/acoes/stream) — desativado por padrão.
+ *
+ * SEGURANÇA / MULTI-TENANT
+ * - X-Tenant-Id obtido de localStorage('tenant_id') ou '1' (fallback).
+ * - fetch com credentials: 'same-origin'.
+ *
+ */
+
 
 /* ====== CONSTANTES E ESTADO ====== */
 const COLS = {
@@ -16,48 +57,44 @@ const STATUS_VALIDOS = Object.keys(COLS);
 const tpl = document.getElementById('tpl-card');
 let draggedId = null;
 
-/* ====== MULTI-TENANT: helper para enviar X-Tenant-Id ====== */
+/* Multi-tenant */
 const TENANT_ID = localStorage.getItem('tenant_id') || '1';
 
-/** fetchTenant: wrapper de fetch que injeta o cabeçalho X-Tenant-Id */
+/* Helpers de normalização e aprovação por data_aprovado */
+const norm = (s) => String(s || '').trim().toLowerCase();
+const hasDate = (v) => {
+    const s = String(v ?? '').trim().toLowerCase();
+    return !!s && s !== 'null' && s !== 'undefined';
+};
+/** Uma ação é "aprovada" quando possui data_aprovado preenchida */
+const isApproved = (acao) => hasDate(acao?.data_aprovado);
+
+/* Atualização em tempo real */
+const SYNC_INTERVAL_MS = 5000; // 5s – ajuste se quiser
+let syncTimer = null;
+
+/* Índices locais: espelho do DOM/servidor */
+const cardIndex = new Map();   // id -> HTMLElement (card)
+const dataIndex = new Map();   // id -> objeto ação (última visão)
+
+
+/* ========================================================================
+ * FETCH helper (injeta cabeçalho X-Tenant-Id)
+ * ===================================================================== */
 function fetchTenant(url, options = {}) {
     const base = options || {};
     const headers = new Headers(base.headers || {});
     headers.set('X-Tenant-Id', TENANT_ID);
-
-    return fetch(url, {
-        credentials: 'same-origin',
-        ...base,
-        headers
-    });
+    return fetch(url, { credentials: 'same-origin', ...base, headers });
 }
-
-/* ====== MODAL (ESTADO E REFERÊNCIAS) ====== */
-let MODAL = {
-    el: null,            // backdrop do modal
-    titleEl: null,       // título (h2)
-    closeBtn: null,      // botão fechar (X)
-    uploadArea: null,    // área de upload (drag&drop)
-    fileInput: null,     // <input type="file" multiple>
-    progress: null,      // barra de progresso (wrapper)
-    bar: null,           // barra de progresso (preenchimento)
-    list: null,          // lista de arquivos
-    currentActionId: null,
-    currentActionTitle: '',
-    currentActionStatus: ''
-};
 
 /* ========================================================================
  * UTILITÁRIOS
  * ===================================================================== */
-
-/** isReadOnlyStatus: retorna true se o status for somente leitura */
 function isReadOnlyStatus(status) {
-    const s = String(status || '').trim().toLowerCase();
-    return s === 'finalizado';
+    return norm(status) === 'finalizado';
 }
 
-/** formatDate: formata ISO para dd/mm/aaaa hh:mm (pt-BR) */
 function formatDate(iso) {
     const d = new Date(iso);
     if (isNaN(d)) return '';
@@ -68,59 +105,42 @@ function formatDate(iso) {
     );
 }
 
-/** extractComment: tenta encontrar o comentário em várias formas de resposta */
 function extractComment(payload) {
-    // candidatos de chaves
     const KEYS = ['comentario', 'comentário', 'comment', 'observacao', 'observação', 'nota', 'justificativa', 'retorno'];
-    // tenta direto
-    for (const k of KEYS) {
-        if (typeof payload?.[k] === 'string') return payload[k];
-    }
-    // wrappers comuns
+    for (const k of KEYS) if (typeof payload?.[k] === 'string') return payload[k];
     const wrappers = ['data', 'acao', 'result', 'item'];
     for (const w of wrappers) {
         const obj = payload?.[w];
         if (obj && typeof obj === 'object') {
-            for (const k of KEYS) {
-                if (typeof obj?.[k] === 'string') return obj[k];
-            }
+            for (const k of KEYS) if (typeof obj?.[k] === 'string') return obj[k];
         }
     }
-    // array como resposta
     if (Array.isArray(payload) && payload.length) {
-        for (const k of KEYS) {
-            if (typeof payload[0]?.[k] === 'string') return payload[0][k];
-        }
+        for (const k of KEYS) if (typeof payload[0]?.[k] === 'string') return payload[0][k];
     }
     return '';
 }
 
 /* ========================================================================
- * KANBAN – CARDS E RENDERIZAÇÃO
+ * KANBAN – CONSTRUÇÃO DE CARDS / RENDER
  * ===================================================================== */
-
-/** buildCard: cria um card a partir de uma ação */
 function buildCard(acao) {
     const node = tpl.content.firstElementChild.cloneNode(true);
     node.classList.add('kanban-card');
     node.dataset.id = acao.id;
     node.dataset.status = acao.status || '';
-    // guarda comentário (se vier do backend já na listagem)
     node.dataset.comment = String(acao.comentario || acao.comment || acao.observacao || '').trim();
 
-    // Conteúdo do card
     node.querySelector('.card-title').textContent = acao.titulo || '(sem título)';
     node.querySelector('.card-protocolo').textContent = acao.protocolo ? `#${acao.protocolo}` : '';
     node.querySelector('.card-cliente').textContent = acao.cliente || '';
     node.querySelector('.card-criador').textContent = acao.criador ? `Criado por: ${acao.criador}` : '';
     node.querySelector('.card-data').textContent = acao.data_criacao ? formatDate(acao.data_criacao) : '';
 
-    // Drag habilitado/desabilitado conforme status
     const ro = isReadOnlyStatus(acao.status);
     node.setAttribute('draggable', ro ? 'false' : 'true');
     if (ro) node.style.opacity = '.85';
 
-    // Eventos de drag com classe .dragging (permite distinguir clique vs arrasto)
     node.addEventListener('dragstart', (e) => {
         if (isReadOnlyStatus(node.dataset.status)) {
             e.preventDefault();
@@ -130,34 +150,114 @@ function buildCard(acao) {
         e.dataTransfer.setData('text/plain', draggedId);
         node.classList.add('dragging');
     });
-    node.addEventListener('dragend', () => {
-        node.classList.remove('dragging');
-    });
+    node.addEventListener('dragend', () => node.classList.remove('dragging'));
 
-    // Abrir modal ao clicar no card (se não for arrasto)
     attachOpenModalOnCard(node, acao);
-
     return node;
 }
 
-/** renderKanban: distribui cards nas colunas por status */
+/* Render inicial (limpa e insere) */
 function renderKanban(acoes) {
     for (const col of Object.values(COLS)) col.innerHTML = '';
+    cardIndex.clear();
+    dataIndex.clear();
+
     for (const acao of acoes) {
+        if (isApproved(acao)) continue; // não mostra aprovadas
+
         const status = STATUS_VALIDOS.includes(acao.status) ? acao.status : 'Não iniciado';
-        COLS[status].appendChild(buildCard(acao));
+        const card = buildCard(acao);
+        COLS[status].appendChild(card);
+        cardIndex.set(String(acao.id), card);
+        dataIndex.set(String(acao.id), acao);
     }
 }
 
-/** loadMyAcoes: busca ações do usuário logado e renderiza o kanban */
-async function loadMyAcoes() {
-    const res = await fetchTenant('/api/acoes/mine');
-    if (!res.ok) throw new Error('Falha ao carregar ações');
-    const acoes = await res.json();
-    renderKanban(acoes);
+
+/* ========================================================================
+ * RECONCILIAÇÃO – Atualiza DOM sem recarregar (add/move/update/remove)
+ * ===================================================================== */
+function reconcileKanban(serverAcoes) {
+    const incoming = new Map();
+    for (const acao of serverAcoes) incoming.set(String(acao.id), acao);
+
+    // 1) Remover cards que sumiram ou ficaram aprovados
+    for (const [id, oldAcao] of dataIndex.entries()) {
+        const nova = incoming.get(id);
+        if (!nova || isApproved(nova)) {
+            removeCard(id);
+        }
+    }
+
+    // 2) Inserir/atualizar os restantes (não aprovados)
+    for (const [id, acao] of incoming.entries()) {
+        if (isApproved(acao)) continue;
+
+        const card = cardIndex.get(id);
+        if (!card) {
+            const novo = buildCard(acao);
+            const destino = COLS[STATUS_VALIDOS.includes(acao.status) ? acao.status : 'Não iniciado'];
+            destino.appendChild(novo);
+            cardIndex.set(id, novo);
+            dataIndex.set(id, acao);
+            continue;
+        }
+
+        const prev = dataIndex.get(id) || {};
+        const mudouStatus = norm(prev.status) !== norm(acao.status);
+        const mudouTitulo = (prev.titulo || '') !== (acao.titulo || '');
+        const mudouCliente = (prev.cliente || '') !== (acao.cliente || '');
+        const mudouProtocolo = (prev.protocolo || '') !== (acao.protocolo || '');
+        const mudouCriador = (prev.criador || '') !== (acao.criador || '');
+        const mudouData = (prev.data_criacao || '') !== (acao.data_criacao || '');
+        const mudouComentario =
+            norm(String(prev.comentario || prev.comment || prev.observacao || '')) !==
+            norm(String(acao.comentario || acao.comment || acao.observacao || ''));
+
+        if (mudouStatus) applyStatusLocally(id, acao.status);
+
+        if (mudouTitulo) card.querySelector('.card-title').textContent = acao.titulo || '(sem título)';
+        if (mudouCliente) card.querySelector('.card-cliente').textContent = acao.cliente || '';
+        if (mudouProtocolo) card.querySelector('.card-protocolo').textContent = acao.protocolo ? `#${acao.protocolo}` : '';
+        if (mudouCriador) card.querySelector('.card-criador').textContent = acao.criador ? `Criado por: ${acao.criador}` : '';
+        if (mudouData) card.querySelector('.card-data').textContent = acao.data_criacao ? formatDate(acao.data_criacao) : '';
+        if (mudouComentario) card.dataset.comment = String(acao.comentario || acao.comment || acao.observacao || '').trim();
+
+        dataIndex.set(id, acao);
+    }
 }
 
-/** updateStatus: altera o status de uma ação no servidor */
+
+function removeCard(id) {
+    const el = cardIndex.get(id);
+    if (el && el.parentElement) el.parentElement.removeChild(el);
+    cardIndex.delete(id);
+    dataIndex.delete(id);
+}
+
+/* Move/oculta card localmente após mudança de status */
+function applyStatusLocally(id, novoStatus) {
+    const card = cardIndex.get(String(id)) || document.querySelector(`.kanban-card[data-id="${id}"]`);
+    if (!card) return;
+
+    const destino = COLS[STATUS_VALIDOS.includes(novoStatus) ? novoStatus : 'Não iniciado'];
+    card.dataset.status = novoStatus;
+    destino.appendChild(card);
+
+    const current = dataIndex.get(String(id)) || {};
+    dataIndex.set(String(id), { ...current, status: novoStatus });
+}
+
+
+/* ========================================================================
+ * API – Listagem e atualização de status
+ * ===================================================================== */
+async function fetchMyAcoes() {
+    const res = await fetchTenant('/api/acoes/mine');
+    if (!res.ok) throw new Error('Falha ao carregar ações');
+    return res.json();
+}
+
 async function updateStatus(id, novoStatus) {
     const res = await fetchTenant(`/api/acoes/${id}/status`, {
         method: 'PATCH',
@@ -170,7 +270,9 @@ async function updateStatus(id, novoStatus) {
     }
 }
 
-/* ====== DROP TARGETS: colunas aceitam cards arrastados ====== */
+/* ========================================================================
+ * DROP TARGETS
+ * ===================================================================== */
 for (const [status, colList] of Object.entries(COLS)) {
     const col = colList.closest('.kanban-col');
 
@@ -190,11 +292,7 @@ for (const [status, colList] of Object.entries(COLS)) {
 
         try {
             await updateStatus(id, status);
-            const card = document.querySelector(`.kanban-card[data-id="${id}"]`);
-            if (card) {
-                card.dataset.status = status;
-                colList.appendChild(card);
-            }
+            applyStatusLocally(id, status); // move localmente; remoção ocorrerá se data_aprovado vier no próximo sync
         } catch (err) {
             alert('Não foi possível mover a ação: ' + err.message);
         } finally {
@@ -204,10 +302,22 @@ for (const [status, colList] of Object.entries(COLS)) {
 }
 
 /* ========================================================================
- * MODAL – REFERÊNCIAS, ABRIR/FECHAR, COMENTÁRIO E ARQUIVOS
+ * MODAL – Referências e fluxo
  * ===================================================================== */
+let MODAL = {
+    el: null,
+    titleEl: null,
+    closeBtn: null,
+    uploadArea: null,
+    fileInput: null,
+    progress: null,
+    bar: null,
+    list: null,
+    currentActionId: null,
+    currentActionTitle: '',
+    currentActionStatus: ''
+};
 
-/** initModalRefs: captura referências do DOM do modal */
 function initModalRefs() {
     MODAL.el = document.getElementById('modal-backdrop');
     MODAL.titleEl = document.getElementById('modal-title');
@@ -215,14 +325,12 @@ function initModalRefs() {
     MODAL.uploadArea = document.getElementById('upload-area');
     MODAL.fileInput = document.getElementById('file-input');
     MODAL.progress = document.getElementById('upload-progress');
-    MODAL.bar = MODAL.progress.firstElementChild;
+    MODAL.bar = MODAL.progress?.firstElementChild || document.createElement('div');
     MODAL.list = document.getElementById('file-list');
 
-    // Avisos de elementos faltando (ajuda a detectar por que o banner não aparece)
-    if (!MODAL.uploadArea) console.warn('[KANBAN] #upload-area não encontrado, banner será inserido no título.');
+    if (!MODAL.uploadArea) console.warn('[KANBAN] #upload-area não encontrado.');
 }
 
-/** openModal: abre o modal, exibe comentário (se houver) e lista arquivos */
 function openModal(actionId, actionTitle, actionStatus, initialComment = '') {
     MODAL.currentActionId = actionId;
     MODAL.currentActionTitle = actionTitle || '';
@@ -235,28 +343,16 @@ function openModal(actionId, actionTitle, actionStatus, initialComment = '') {
     MODAL.el.setAttribute('aria-hidden', 'false');
     document.body.style.overflow = 'hidden';
 
-    // Bloqueio visual da área de upload, se status for somente leitura
     const ro = isReadOnlyStatus(MODAL.currentActionStatus);
     MODAL.uploadArea?.classList.toggle('disabled', ro);
 
-    // 1) Mostra comentário imediatamente se veio do card
-    if (initialComment && initialComment.trim()) {
-        console.debug('[KANBAN] Comentário inicial do card:', initialComment);
-        renderCommentBanner(initialComment.trim());
-    } else {
-        removeCommentBanner();
-    }
+    if (initialComment && initialComment.trim()) renderCommentBanner(initialComment.trim());
+    else removeCommentBanner();
 
-    // 2) Busca comentário mais recente no backend
-    loadActionComment(actionId).catch((e) => {
-        console.error('[KANBAN] Erro ao carregar comentário:', e);
-    });
-
-    // 3) Carrega listagem de arquivos
+    loadActionComment(actionId).catch(console.error);
     loadFilesForAction(actionId).catch(console.error);
 }
 
-/** closeModal: fecha modal e limpa itens/progresso */
 function closeModal() {
     MODAL.el.classList.remove('open');
     MODAL.el.setAttribute('aria-hidden', 'true');
@@ -267,66 +363,46 @@ function closeModal() {
     resetProgress();
 }
 
-/** resetProgress: esconde e zera barra de progresso */
 function resetProgress() {
+    if (!MODAL.progress) return;
     MODAL.progress.style.display = 'none';
-    MODAL.bar.style.width = '0%';
+    if (MODAL.bar) MODAL.bar.style.width = '0%';
 }
 
-/** loadActionComment: busca detalhe da ação para obter 'comentario' */
 async function loadActionComment(actionId) {
     let res;
     try {
-        res = await fetchTenant(`/api/acoes/${actionId}`, {
-            headers: { 'Accept': 'application/json' }
-        });
-    } catch (e) {
-        console.error('[KANBAN] Falha no fetch primário:', e);
-    }
+        res = await fetchTenant(`/api/acoes/${actionId}`, { headers: { 'Accept': 'application/json' } });
+    } catch (e) { /* ignore */ }
 
     if (!res || !res.ok) {
         try {
-            res = await fetchTenant(`/api/acoes/detalhes/${actionId}`, {
-                headers: { 'Accept': 'application/json' }
-            });
-        } catch (e) {
-            console.error('[KANBAN] Falha no fetch fallback:', e);
-        }
+            res = await fetchTenant(`/api/acoes/detalhes/${actionId}`, { headers: { 'Accept': 'application/json' } });
+        } catch (e) { /* ignore */ }
     }
-
-    if (!res || !res.ok) {
-        console.warn('[KANBAN] Não foi possível obter comentário (resposta inválida).');
-        return;
-    }
+    if (!res || !res.ok) return;
 
     const data = await res.json().catch(() => null);
     const comentario = String(extractComment(data) || '').trim();
-    console.debug('[KANBAN] Comentário do backend extraído:', comentario);
-
     if (comentario) renderCommentBanner(comentario);
     else removeCommentBanner();
 }
 
-/** getBannerContainer: define onde inserir o banner de comentário */
 function getBannerContainer() {
-    // tenta inserir antes de #upload-area
     if (MODAL.uploadArea?.parentElement) return { parent: MODAL.uploadArea.parentElement, before: MODAL.uploadArea };
-    // fallback: container próximo ao título
     const fallbackParent = MODAL.titleEl?.parentElement || MODAL.el;
     return { parent: fallbackParent, before: fallbackParent?.lastChild || null };
 }
 
-/** renderCommentBanner: insere banner de comentário */
 function renderCommentBanner(texto) {
-    removeCommentBanner(); // garante único banner
-
+    removeCommentBanner();
     const banner = document.createElement('div');
     banner.id = 'comment-banner';
     banner.setAttribute('role', 'note');
     banner.style.cssText = `
-    margin: 12px 0 6px; padding: 12px;
-    border: 1px solid #f59e0b; background: #fffbeb; color: #7c2d12;
-    border-radius: 10px; display: flex; gap: 10px; align-items: flex-start;
+    margin:12px 0 6px; padding:12px;
+    border:1px solid #f59e0b; background:#fffbeb; color:#7c2d12;
+    border-radius:10px; display:flex; gap:10px; align-items:flex-start;
   `;
 
     const icon = document.createElement('span');
@@ -352,17 +428,10 @@ function renderCommentBanner(texto) {
     background:#fff; border:1px solid #f59e0b; color:#92400e;
     padding:6px 10px; border-radius:8px; cursor:pointer;
   `;
-    btn.addEventListener('click', async () => {
-        // (Opcional) Chamar backend para marcar como lido
-        // await fetchTenant(`/api/acoes/${MODAL.currentActionId}/comentario-lido`, { method: 'POST' });
-        removeCommentBanner();
-    });
+    btn.addEventListener('click', () => removeCommentBanner());
 
     const { parent, before } = getBannerContainer();
-    if (!parent) {
-        console.warn('[KANBAN] Não achei container para inserir o banner.');
-        return;
-    }
+    if (!parent) return;
 
     const wrap = document.createElement('div');
     wrap.style.width = '100%';
@@ -374,24 +443,20 @@ function renderCommentBanner(texto) {
     parent.insertBefore(banner, before);
 }
 
-/** removeCommentBanner: remove o banner de comentário se existir */
 function removeCommentBanner() {
     const banner = document.getElementById('comment-banner');
     if (banner) banner.remove();
 }
 
 /* ========================================================================
- * ARQUIVOS – LISTAGEM, RENDERIZAÇÃO E EXCLUSÃO
+ * ARQUIVOS – LISTA/RENDER/EXCLUIR
  * ===================================================================== */
-
-/** loadFilesForAction: lista arquivos agrupados e renderiza itens */
 async function loadFilesForAction(actionId) {
     MODAL.list.innerHTML = '<div style="color:#64748b">Carregando…</div>';
     try {
         const res = await fetchTenant(`/api/acoes/arquivos/${actionId}`);
         if (!res.ok) throw new Error('Falha ao listar arquivos');
 
-        // Esperado: {Contrato:[], Procuracao:[], Declaracao:[], Ficha:[], Documentacao:[], Provas:[], Acao:[]}
         const grupos = await res.json();
         const flat = []
             .concat(
@@ -422,7 +487,6 @@ async function loadFilesForAction(actionId) {
     }
 }
 
-/** renderFileItem: cria item de arquivo (download e excluir quando permitido) */
 function renderFileItem(f) {
     const div = document.createElement('div');
     div.className = 'file-item';
@@ -438,8 +502,7 @@ function renderFileItem(f) {
     a.textContent = f.nome || f.filename || 'arquivo';
     left.appendChild(a);
 
-    // Dica de tipo (prefixo antes de " - ")
-    const tipo = (f.nome || '').split(' - ')[0]; // "ACAO", "CON", "DOC", "PROV"
+    const tipo = (f.nome || '').split(' - ')[0];
     const hint = document.createElement('small');
     hint.style.color = '#64748b';
     hint.textContent = tipo ? `Tipo: ${tipo}` : '';
@@ -447,7 +510,6 @@ function renderFileItem(f) {
 
     div.appendChild(left);
 
-    // Excluir somente quando começa com "ACAO - " e não estiver read-only
     const podeExcluir = (f.nome || '').startsWith('ACAO - ')
         && !isReadOnlyStatus(MODAL.currentActionStatus);
 
@@ -481,19 +543,16 @@ function renderFileItem(f) {
 /* ========================================================================
  * UPLOAD – INPUT, DRAG&DROP E PROGRESSO
  * ===================================================================== */
-
-/** setupUploadArea: registra eventos do input e do drag&drop */
 function setupUploadArea() {
     const area = MODAL.uploadArea;
+    if (!area) return;
 
-    // Input de arquivo
-    MODAL.fileInput.addEventListener('change', async (e) => {
+    MODAL.fileInput?.addEventListener('change', async (e) => {
         if (!e.target.files?.length) return;
         await uploadFiles(e.target.files);
         MODAL.fileInput.value = '';
     });
 
-    // Drag-over/enter (realce)
     ['dragenter', 'dragover'].forEach((evt) => {
         area.addEventListener(evt, (e) => {
             e.preventDefault();
@@ -502,7 +561,6 @@ function setupUploadArea() {
         });
     });
 
-    // Drag-leave/drop (remove realce)  **(corrigido)**
     ['dragleave', 'drop'].forEach((evt) => {
         area.addEventListener(evt, (e) => {
             e.preventDefault();
@@ -511,14 +569,12 @@ function setupUploadArea() {
         });
     });
 
-    // Drop de arquivos
     area.addEventListener('drop', async (e) => {
         const files = e.dataTransfer?.files;
         if (files && files.length) await uploadFiles(files);
     });
 }
 
-/** uploadFiles: envia arquivos um a um com progresso */
 async function uploadFiles(fileList) {
     if (!MODAL.currentActionId) return;
 
@@ -533,21 +589,21 @@ async function uploadFiles(fileList) {
         fd.append('arquivo', file);
 
         await xhrUpload('/api/acoes/upload-acao', fd, (pct) => {
-            MODAL.progress.style.display = 'block';
-            MODAL.bar.style.width = pct + '%';
+            if (MODAL.progress && MODAL.bar) {
+                MODAL.progress.style.display = 'block';
+                MODAL.bar.style.width = pct + '%';
+            }
         });
         resetProgress();
     }
     await loadFilesForAction(MODAL.currentActionId);
 }
 
-/** xhrUpload: faz upload via XMLHttpRequest permitindo acompanhar progresso */
 function xhrUpload(url, formData, onProgress) {
     return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open('POST', url, true);
         xhr.withCredentials = true;
-        // MULTI-TENANT: envia o cabeçalho também no XHR de upload
         try { xhr.setRequestHeader('X-Tenant-Id', TENANT_ID); } catch (_) { }
 
         xhr.upload.onprogress = (e) => {
@@ -572,40 +628,71 @@ function xhrUpload(url, formData, onProgress) {
 }
 
 /* ========================================================================
- * INTERAÇÕES – CLICK NO CARD E INICIALIZAÇÃO
+ * INTERAÇÕES – Clique no card / Inicialização
  * ===================================================================== */
-
-/** attachOpenModalOnCard: abre modal ao clicar no card (evita clique durante arrasto) */
 function attachOpenModalOnCard(node, acao) {
     node.addEventListener('click', (ev) => {
-        if (ev.target.closest('.dragging')) return; // evita clique vindo de arrasto
-        // passa o comentário do dataset (se houver) para exibir instantaneamente
+        if (ev.target.closest('.dragging')) return;
         openModal(acao.id, acao.titulo, acao.status, node.dataset.comment || '');
     });
 }
 
-/** Inicialização: carrega kanban, prepara modal e atalhos */
-document.addEventListener('DOMContentLoaded', async () => {
-    // 1) Carregar kanban
+/* ========================================================================
+ * SYNC – Loop de sincronização sem F5
+ * ===================================================================== */
+async function fullSync() {
     try {
-        await loadMyAcoes();
+        const acoes = await fetchMyAcoes();
+        if (dataIndex.size === 0 && cardIndex.size === 0) {
+            renderKanban(acoes);
+        } else {
+            reconcileKanban(acoes);
+        }
     } catch (e) {
-        console.error(e);
-        alert('Erro ao carregar Kanban: ' + e.message);
+        console.error('[KANBAN] Sync falhou:', e);
     }
+}
 
-    // 2) Iniciar modal + upload + atalhos de fechamento
+function startPolling() {
+    stopPolling();
+    syncTimer = setInterval(fullSync, SYNC_INTERVAL_MS);
+}
+
+function stopPolling() {
+    if (syncTimer) {
+        clearInterval(syncTimer);
+        syncTimer = null;
+    }
+}
+
+/* ========================================================================
+ * BOOTSTRAP
+ * ===================================================================== */
+document.addEventListener('DOMContentLoaded', async () => {
+    // 1) Carrega e renderiza
+    await fullSync();
+
+    // 2) Inicia modal + upload + atalhos
     initModalRefs();
     setupUploadArea();
 
     // Fechar clicando fora
-    MODAL.el.addEventListener('click', (e) => {
+    MODAL.el?.addEventListener('click', (e) => {
         if (e.target === MODAL.el) closeModal();
     });
     // Fechar no X
-    MODAL.closeBtn.addEventListener('click', closeModal);
+    MODAL.closeBtn?.addEventListener('click', closeModal);
     // Fechar com Esc
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && MODAL.el.classList.contains('open')) closeModal();
+        if (e.key === 'Escape' && MODAL.el?.classList.contains('open')) closeModal();
+    });
+
+    // 3) Loop de sincronização
+    startPolling();
+    // startSSE(); // habilite quando houver endpoint SSE
+
+    // 4) Sincroniza imediatamente quando a aba ganha foco
+    window.addEventListener('focus', () => {
+        fullSync(); // atualização instantânea ao voltar para a aba
     });
 });
