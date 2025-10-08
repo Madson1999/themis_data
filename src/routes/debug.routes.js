@@ -1,3 +1,15 @@
+/**
+ * routes/debug.documentos.routes.js
+ * ----------------------------------------
+ * Rota de diagnóstico dos modelos .docx (global – sem tenant).
+ * - GET /debug/docx → valida se os arquivos de template existem e compilam no Docxtemplater.
+ *   Retorno: [{ nome, ok: boolean, erro?|errors? }]
+ *
+ * Observações:
+ * - Apenas validação de templates; não há acesso a banco e não depende de tenant_id.
+ * - Delimitadores esperados nos .docx: [[CHAVE]]
+ */
+
 const express = require('express');
 const router = express.Router();
 const fs = require('fs-extra');
@@ -7,36 +19,48 @@ const Docxtemplater = require('docxtemplater');
 
 const modelos = ['CONTRATO.docx', 'DECLARACAO.docx', 'FICHA.docx', 'PROCURACAO.docx'];
 
-router.get('/docx', async (req, res) => {
+router.get('/docx', async (_req, res) => {
     const base = path.join(__dirname, '..', '..', 'public', 'documentos', 'modelos');
-    const out = [];
-    for (const nome of modelos) {
-        const p = path.join(base, nome);
-        if (!await fs.pathExists(p)) {
-            out.push({ nome, ok: false, erro: 'arquivo não encontrado' });
-            continue;
-        }
-        try {
-            const bin = await fs.readFile(p, 'binary');
-            const zip = new PizZip(bin);
-            // só compila, não renderiza
-            new Docxtemplater(zip, {
-                paragraphLoop: true,
-                linebreaks: true,
-                delimiters: { start: '[[', end: ']]' },
-            });
 
-            out.push({ nome, ok: true });
-        } catch (e) {
-            const errors = e?.properties?.errors?.map(er => ({
-                file: er.properties?.file,
-                context: er.properties?.context,
-                message: er.message
-            })) || [{ message: e.message }];
-            out.push({ nome, ok: false, errors });
+    try {
+        const existeBase = await fs.pathExists(base);
+        if (!existeBase) {
+            return res.status(500).json({ sucesso: false, mensagem: `Pasta de modelos não encontrada: ${base}` });
         }
+
+        const out = [];
+        for (const nome of modelos) {
+            const p = path.join(base, nome);
+            if (!(await fs.pathExists(p))) {
+                out.push({ nome, ok: false, erro: 'arquivo não encontrado' });
+                continue;
+            }
+            try {
+                const bin = await fs.readFile(p, 'binary');
+                const zip = new PizZip(bin);
+                // Só compila, não renderiza
+                new Docxtemplater(zip, {
+                    paragraphLoop: true,
+                    linebreaks: true,
+                    delimiters: { start: '[[', end: ']]' },
+                });
+
+                out.push({ nome, ok: true });
+            } catch (e) {
+                const errors =
+                    e?.properties?.errors?.map(er => ({
+                        file: er.properties?.file,
+                        context: er.properties?.context,
+                        message: er.message,
+                    })) || [{ message: e.message }];
+                out.push({ nome, ok: false, errors });
+            }
+        }
+        return res.json(out);
+    } catch (err) {
+        console.error('Erro ao validar modelos DOCX:', err);
+        return res.status(500).json({ sucesso: false, mensagem: 'Falha ao validar modelos' });
     }
-    res.json(out);
 });
 
 module.exports = router;

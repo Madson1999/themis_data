@@ -1,113 +1,207 @@
 /**
  * services/clientes.service.js
  * ----------------------------------------
- * Regras e consultas de clientes (MySQL).
- * - Listagem/busca por nome (com normalização) e CPF/CNPJ (somente dígitos)
- * - Busca leve para documentos (autocomplete)
- * - CRUD completo (verifica duplicidades de CPF/CNPJ)
+ * Regras e consultas de clientes (MySQL) — Multi-tenant.
+ *
+ * - Tabela: `clientes` (plural)
+ * - Todas as consultas são filtradas por `tenant_id`
+ * - UNIQUE por tenant: (tenant_id, cpf_cnpj)
+ *
+ * Funcionalidades:
+ *  - Listagem/busca por nome (com normalização) e CPF/CNPJ (somente dígitos)
+ *  - Busca leve para documentos (autocomplete)
+ *  - CRUD completo (verifica duplicidades de CPF/CNPJ por tenant)
  */
 
-const { executeQuery } = require('../config/database');
+const { query, executeQuery, executeUpdate } = require('../config/database');
 
-exports.listar = async (searchTermRaw = '') => {
-    const termoBruto = (searchTermRaw || '').trim();
-    if (!termoBruto) return executeQuery('SELECT * FROM cliente ORDER BY nome', []);
+const ALLOWED_FIELDS = [
+    'nome', 'data_nasc', 'cpf_cnpj', 'rg',
+    'telefone1', 'telefone2', 'email',
+    'endereco', 'bairro', 'cep', 'uf', 'cidade',
+    'nacionalidade', 'estado_civil', 'profissao'
+];
 
-    const somenteDigitos = termoBruto.replace(/\D/g, '');
-    const partesNome = termoBruto
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
+function digitsOnly(s) {
+    return String(s || '').replace(/\D+/g, '');
+}
+
+function normalizeNameTokens(s) {
+    return String(s || '')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
         .trim().split(/\s+/).filter(Boolean);
+}
 
-    const where = [];
-    const params = [];
+/**
+ * Listar/buscar clientes do tenant.
+ */
+exports.listar = async ({ tenantId, limit, offset, searchTerm = '' }) => {
+    const lim = Number.isFinite(Number(limit)) ? Number(limit) : 20;
+    const off = Number.isFinite(Number(offset)) ? Number(offset) : 0;
 
-    if (partesNome.length) {
-        partesNome.forEach(p => { where.push('LOWER(nome) LIKE ?'); params.push(`%${p.toLowerCase()}%`); });
+    const where = ['tenant_id = ?'];
+    const params = [Number(tenantId)];
+
+    if (searchTerm) {
+        const like = `%${searchTerm}%`;
+        where.push(`(nome LIKE ? OR cpf_cnpj LIKE ? OR email LIKE ? OR telefone1 LIKE ? OR telefone2 LIKE ?)`);
+        params.push(like, like, like, like, like);
     }
-    if (somenteDigitos.length >= 3) {
-        where.push("REPLACE(REPLACE(REPLACE(REPLACE(cpf_cnpj, '.', ''), '-', ''), '/', ''), ' ', '') LIKE ?");
-        params.push(`%${somenteDigitos}%`);
-    }
-    if (!where.length) return [];
 
-    const nomeConds = where.slice(0, partesNome.length);
-    const cpfConds = where.slice(partesNome.length);
     const sql = `
-    SELECT * FROM cliente
-    WHERE ${[
-            nomeConds.length ? `(${nomeConds.join(' AND ')})` : null,
-            cpfConds.length ? `(${cpfConds.join(' AND ')})` : null
-        ].filter(Boolean).join(' OR ')}
-    ORDER BY nome
+    SELECT
+      id, tenant_id, nome, data_nasc, cpf_cnpj, rg,
+      telefone1, telefone2, email,
+      endereco, bairro, cep, uf, cidade,
+      nacionalidade, estado_civil, profissao
+      FROM clientes
+     WHERE ${where.join(' AND ')}
+     ORDER BY nome
+     LIMIT ${lim} OFFSET ${off}
   `;
-    return executeQuery(sql, params);
+    return query(sql, params); // LIMIT/OFFSET inline numérico
 };
 
-exports.buscarParaDocumento = async (qRaw = '') => {
-    const q = qRaw.trim();
+/**
+ * Busca leve para autocomplete de documentos.
+ */
+exports.buscarParaDocumento = async (tenantId, qRaw = '') => {
+    const q = (qRaw || '').trim();
     if (!q) return [];
-    const qLike = `%${q}%`;
-    const qDigits = q.replace(/\D+/g, '');
 
-    if (qDigits.length > 0 && /^\d+$/.test(q)) {
-        return executeQuery(`
+    const qDigits = digitsOnly(q);
+
+    if (qDigits.length >= 3) {
+        return executeQuery(
+            `
       SELECT id, nome, cpf_cnpj
-      FROM cliente
-      WHERE REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(cpf_cnpj, '.', ''), '-', ''), '/', ''), ' ', ''), '\\\\', '') LIKE ?
-      ORDER BY nome
-      LIMIT 20
-    `, [`%${qDigits}%`]);
+        FROM clientes
+       WHERE tenant_id = ?
+         AND REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(cpf_cnpj, '.', ''), '-', ''), '/', ''), ' ', ''), '\\\\', '') LIKE ?
+       ORDER BY nome
+       LIMIT 20
+      `,
+            [Number(tenantId), `%${qDigits}%`]
+        );
     }
 
-    return executeQuery(`
+    const like = `%${q}%`;
+    return executeQuery(
+        `
     SELECT id, nome, cpf_cnpj
-    FROM cliente
-    WHERE nome COLLATE utf8mb4_general_ci LIKE ?
-    ORDER BY nome
-    LIMIT 20
-  `, [qLike]);
+      FROM clientes
+     WHERE tenant_id = ?
+       AND nome COLLATE utf8mb4_general_ci LIKE ?
+     ORDER BY nome
+     LIMIT 20
+    `,
+        [Number(tenantId), like]
+    );
 };
 
-exports.criar = async (payload) => {
-    const { nome, data_nasc, cpf_cnpj, rg, telefone1, telefone2, email, endereco, bairro, cep, uf, cidade, profissao, nacionalidade, estado_civil } = payload;
+/**
+ * Criar cliente
+ */
+exports.criar = async (tenantId, payload = {}) => {
+    const { nome, cpf_cnpj } = payload || {};
+    if (!nome || !cpf_cnpj) {
+        return { status: 400, body: { sucesso: false, mensagem: 'Nome e CPF/CNPJ são obrigatórios' } };
+    }
 
-    const existe = await executeQuery('SELECT id FROM cliente WHERE cpf_cnpj = ?', [cpf_cnpj]);
+    const existe = await executeQuery(
+        `SELECT id FROM clientes WHERE tenant_id = ? AND cpf_cnpj = ? LIMIT 1`,
+        [Number(tenantId), cpf_cnpj]
+    );
     if (existe.length > 0) {
         return { status: 400, body: { sucesso: false, mensagem: 'CPF/CNPJ já cadastrado' } };
     }
 
-    const result = await executeQuery(
-        'INSERT INTO cliente (nome, data_nasc, cpf_cnpj, rg, telefone1, telefone2, email, endereco, bairro, cep, uf, cidade, profissao, nacionalidade, estado_civil) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [nome || null, data_nasc || null, cpf_cnpj || null, rg || null, telefone1 || null, telefone2 || null, email, endereco || null, bairro || null, cep || null, uf || null, cidade || null, profissao || null, nacionalidade || null, estado_civil || null]
-    );
+    const data = {};
+    for (const k of ALLOWED_FIELDS) data[k] = payload[k] ?? null;
 
+    const sql = `
+    INSERT INTO clientes
+      (tenant_id, nome, data_nasc, cpf_cnpj, rg,
+       telefone1, telefone2, email,
+       endereco, bairro, cep, uf, cidade,
+       nacionalidade, estado_civil, profissao)
+    VALUES (?,?,?,?, ?,?,?,?, ?,?,?,?, ?,?,?,?)
+  `;
+    const params = [
+        Number(tenantId),
+        data.nome, data.data_nasc, data.cpf_cnpj, data.rg,
+        data.telefone1, data.telefone2, data.email,
+        data.endereco, data.bairro, data.cep, data.uf, data.cidade,
+        data.nacionalidade, data.estado_civil, data.profissao
+    ];
+
+    const result = await executeUpdate(sql, params);
     return { sucesso: true, mensagem: 'Cliente cadastrado com sucesso!', id: result.insertId };
 };
 
-exports.obterPorId = async (id) => {
-    const r = await executeQuery('SELECT * FROM cliente WHERE id = ?', [id]);
-    return r[0];
+/**
+ * Obter por id
+ */
+exports.obterPorId = async (tenantId, id) => {
+    const r = await executeQuery(
+        `
+    SELECT
+      id, tenant_id, nome, data_nasc, cpf_cnpj, rg,
+      telefone1, telefone2, email,
+      endereco, bairro, cep, uf, cidade,
+      nacionalidade, estado_civil, profissao
+      FROM clientes
+     WHERE tenant_id = ? AND id = ?
+     LIMIT 1
+    `,
+        [Number(tenantId), Number(id)]
+    );
+    return r[0] || null;
 };
 
-exports.atualizar = async (id, payload) => {
-    const existe = await executeQuery('SELECT id FROM cliente WHERE id = ?', [id]);
+/**
+ * Atualizar cliente
+ */
+exports.atualizar = async (tenantId, id, payload = {}) => {
+    const existe = await executeQuery(
+        `SELECT id FROM clientes WHERE tenant_id = ? AND id = ? LIMIT 1`,
+        [Number(tenantId), Number(id)]
+    );
     if (!existe.length) return 'NOT_FOUND';
 
     if (payload.cpf_cnpj) {
-        const cpfExist = await executeQuery('SELECT id FROM cliente WHERE cpf_cnpj = ? AND id != ?', [payload.cpf_cnpj, id]);
-        if (cpfExist.length > 0) return 'CPF_DUP';
+        const dup = await executeQuery(
+            `SELECT id FROM clientes WHERE tenant_id = ? AND cpf_cnpj = ? AND id != ? LIMIT 1`,
+            [Number(tenantId), payload.cpf_cnpj, Number(id)]
+        );
+        if (dup.length > 0) return 'CPF_DUP';
     }
 
-    const setStr = Object.keys(payload).map(c => `${c} = ?`).join(', ');
-    const valores = [...Object.values(payload), id];
-    await executeQuery(`UPDATE cliente SET ${setStr} WHERE id = ?`, valores);
+    const update = {};
+    for (const k of ALLOWED_FIELDS) {
+        if (Object.prototype.hasOwnProperty.call(payload, k)) {
+            update[k] = payload[k];
+        }
+    }
+    if (!Object.keys(update).length) return 'OK';
+
+    const setStr = Object.keys(update).map((c) => `${c} = ?`).join(', ');
+    const valores = [...Object.values(update), Number(tenantId), Number(id)];
+
+    await executeUpdate(`UPDATE clientes SET ${setStr} WHERE tenant_id = ? AND id = ?`, valores);
     return 'OK';
 };
 
-exports.excluir = async (id) => {
-    const existe = await executeQuery('SELECT id FROM cliente WHERE id = ?', [id]);
+/**
+ * Excluir cliente
+ */
+exports.excluir = async (tenantId, id) => {
+    const existe = await executeQuery(
+        `SELECT id FROM clientes WHERE tenant_id = ? AND id = ? LIMIT 1`,
+        [Number(tenantId), Number(id)]
+    );
     if (!existe.length) return 'NOT_FOUND';
-    await executeQuery('DELETE FROM cliente WHERE id = ?', [id]);
+
+    await executeUpdate(`DELETE FROM clientes WHERE tenant_id = ? AND id = ?`, [Number(tenantId), Number(id)]);
     return 'OK';
 };

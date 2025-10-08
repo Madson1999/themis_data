@@ -1,30 +1,59 @@
 /**
  * routes/acoes.routes.js
  * ----------------------------------------
- * Rotas de ações (processos) e Kanban.
- * - GET  /api/acoes?status=       → lista agrupando por designado
- * - POST /api/acoes               → cria ação (uploads iniciais)
- * - POST /api/acoes/upload-acao|upload-documento|upload-documentacao|upload-provas
- * - POST /api/acoes/remover-arquivo
- * - POST /api/acoes/aprovar/:id
- * - GET  /api/acoes/status/:id    | PUT /api/acoes/status/:id
- * - GET  /api/acoes/arquivos/:id
- * - POST/GET /api/acoes/comentario/:acaoId
- * - GET  /api/acoes/mine          (auth por cookie)
- * - PATCH /api/acoes/:id/status   (somente do designado logado)
+ * Rotas de ações (processos) e Kanban — multi-tenant.
+ *
+ * - Exige identificação do tenant em todas as rotas (cookie `tenant_id` ou header `x-tenant-id`)
+ * - Algumas rotas também exigem usuário autenticado via cookies (ensureAuthCookies)
+ *
+ * Endpoints:
+ *  GET    /api/acoes?status=       → lista agrupando por designado
+ *  POST   /api/acoes               → cria ação (uploads iniciais)
+ *  POST   /api/acoes/upload-acao|upload-contrato|upload-procuracao|upload-declaracao|upload-ficha|upload-documentacao|upload-provas
+ *  POST   /api/acoes/remover-arquivo
+ *  POST   /api/acoes/aprovar/:id
+ *  GET    /api/acoes/status/:id
+ *  PUT    /api/acoes/status/:id
+ *  GET    /api/acoes/arquivos/:id
+ *  POST   /api/acoes/comentario/:acaoId
+ *  GET    /api/acoes/comentario/:acaoId
+ *  GET    /api/acoes/mine          (auth por cookie)
+ *  PATCH  /api/acoes/:id/status    (somente do designado logado)
  */
-
 
 const { Router } = require('express');
 const c = require('../controllers/acoes.controller');
-const { upload } = require('../utils/uploads');         // multer centralizado
-const { ensureAuthCookies } = require('../middlewares/authCookies'); // mesmo comportamento do server.js
+const { upload } = require('../utils/uploads');                  // multer centralizado
+const { ensureAuthCookies } = require('../middlewares/authCookies');
+
 const router = Router();
+
+/** Middleware local: exige tenant_id (cookie ou header) em todas as rotas abaixo */
+function ensureTenant(req, res, next) {
+    const fromCookie = req.cookies?.tenant_id;
+    const fromHeader = req.headers['x-tenant-id'];
+    const t = Number(fromCookie ?? fromHeader);
+    if (!Number.isFinite(t) || t <= 0) {
+        return res.status(401).json({ sucesso: false, mensagem: 'Tenant não identificado' });
+    }
+    next();
+}
+
+// todas as rotas de ações exigem escopo de tenant
+router.use(ensureTenant);
 
 // LISTAGEM/CRUD BÁSICO
 router.get('/', c.listar); // ?status=
-router.post('/',
-    upload.fields([{ name: 'contratoArquivo' }, { name: 'procuracaoArquivo' }, { name: 'declaracaoArquivo' }, { name: 'fichaArquivo' }, { name: 'documentacaoArquivo' }, { name: 'provasArquivo' }]),
+router.post(
+    '/',
+    upload.fields([
+        { name: 'contratoArquivo' },
+        { name: 'procuracaoArquivo' },
+        { name: 'declaracaoArquivo' },
+        { name: 'fichaArquivo' },
+        { name: 'documentacaoArquivo' },
+        { name: 'provasArquivo' },
+    ]),
     c.criar
 );
 
@@ -52,7 +81,7 @@ router.get('/arquivos/:id', c.listarArquivos);
 router.post('/comentario/:acaoId', c.salvarComentario);
 router.get('/comentario/:acaoId', c.obterComentario);
 
-// “MINHAS AÇÕES” e PATCH de status do designado logado
+// “MINHAS AÇÕES” e PATCH de status do designado logado (exige usuário autenticado)
 router.get('/mine', ensureAuthCookies, c.minhasAcoes);
 router.patch('/:id/status', ensureAuthCookies, c.patchStatusMine);
 

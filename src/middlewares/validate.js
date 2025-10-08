@@ -1,22 +1,45 @@
 /**
  * validate.js
  * ----------------------------------------
- * Middleware genérico para validação de requisições.
+ * Middleware genérico para validação de requisições (padrão SaaS).
  * Compatível com Zod, Joi ou Yup.
+ *
  * - Valida body, params e query de acordo com o schema fornecido
- * - Retorna erro 422 em caso de falha de validação
+ * - Suporta versões síncronas e assíncronas (ex.: zod.safeParseAsync / yup.validate)
  * - Sanitiza/normaliza os dados se a lib suportar
- * Uso: router.post('/', validate(schema), controller.fn)
+ * - Retorna erro 422 com payload consistente:
+ *     { sucesso: false, mensagem: 'Validação falhou', detalhes: [...] }
+ *
+ * Uso:
+ *   router.post('/', validate(schema), controller.fn)
+ *   // onde "schema" valida um objeto { body, params, query }
  */
 
-function parseWithSchema(schema, payload) {
-    // Zod
-    if (schema && typeof schema.safeParse === 'function') {
+// Torna o parser compatível com Zod, Joi e Yup (sync/async)
+async function parseWithSchema(schema, payload) {
+    if (!schema) return payload;
+
+    // Zod (preferir async se existir)
+    if (typeof schema.safeParseAsync === 'function') {
+        const result = await schema.safeParseAsync(payload);
+        if (!result.success) {
+            const detalhes = result.error?.issues?.map(i => ({
+                path: Array.isArray(i.path) ? i.path.join('.') : (i.path || ''),
+                message: i.message,
+            })) || [];
+            const err = new Error('Validação falhou');
+            err.status = 422;
+            err.details = detalhes;
+            throw err;
+        }
+        return result.data;
+    }
+    if (typeof schema.safeParse === 'function') {
         const result = schema.safeParse(payload);
         if (!result.success) {
             const detalhes = result.error?.issues?.map(i => ({
-                path: i.path?.join('.') || '',
-                message: i.message
+                path: Array.isArray(i.path) ? i.path.join('.') : (i.path || ''),
+                message: i.message,
             })) || [];
             const err = new Error('Validação falhou');
             err.status = 422;
@@ -27,12 +50,14 @@ function parseWithSchema(schema, payload) {
     }
 
     // Joi
-    if (schema && typeof schema.validate === 'function') {
-        const { error, value } = schema.validate(payload, { abortEarly: false, stripUnknown: true });
+    if (typeof schema.validate === 'function') {
+        // Joi v17+: validate pode ser sync; ainda assim tratamos como possivelmente async
+        const maybePromise = schema.validate(payload, { abortEarly: false, stripUnknown: true });
+        const { error, value } = await Promise.resolve(maybePromise);
         if (error) {
             const detalhes = (error.details || []).map(d => ({
-                path: d.path?.join('.') || '',
-                message: d.message
+                path: Array.isArray(d.path) ? d.path.join('.') : (d.path || ''),
+                message: d.message,
             }));
             const err = new Error('Validação falhou');
             err.status = 422;
@@ -42,43 +67,63 @@ function parseWithSchema(schema, payload) {
         return value;
     }
 
-    // Yup (sincrono)
-    if (schema && typeof schema.validateSync === 'function') {
+    // Yup (async)
+    if (typeof schema.validate === 'function') {
+        try {
+            const value = await schema.validate(payload, { abortEarly: false, stripUnknown: true });
+            return value;
+        } catch (e) {
+            const detalhes = (e.inner || []).map(d => ({
+                path: (d.path || '').toString(),
+                message: d.message,
+            }));
+            const err = new Error('Validação falhou');
+            err.status = 422;
+            err.details = detalhes.length ? detalhes : [{ message: e.message }];
+            throw err;
+        }
+    }
+
+    // Yup (sync) fallback
+    if (typeof schema.validateSync === 'function') {
         try {
             return schema.validateSync(payload, { abortEarly: false, stripUnknown: true });
         } catch (e) {
             const detalhes = (e.inner || []).map(d => ({
                 path: (d.path || '').toString(),
-                message: d.message
+                message: d.message,
             }));
             const err = new Error('Validação falhou');
             err.status = 422;
-            err.details = detalhes;
+            err.details = detalhes.length ? detalhes : [{ message: e.message }];
             throw err;
         }
     }
 
-    // Sem schema: retorna como veio
+    // Schema desconhecido: retorna como veio
     return payload;
 }
 
-exports.validate = (schema) => (req, res, next) => {
+exports.validate = (schema) => async (req, res, next) => {
     try {
-        // Padrão: validamos um objeto com body/params/query
+        // Validamos um objeto composto { body, params, query }
         const dados = { body: req.body, params: req.params, query: req.query };
-        const parsed = parseWithSchema(schema, dados);
+        const parsed = await parseWithSchema(schema, dados);
 
         // Caso a lib retorne dados “sanitizados”, atualizamos req.*
-        if (parsed?.body) req.body = parsed.body;
-        if (parsed?.params) req.params = parsed.params;
-        if (parsed?.query) req.query = parsed.query;
+        if (parsed && typeof parsed === 'object') {
+            if (Object.prototype.hasOwnProperty.call(parsed, 'body')) req.body = parsed.body;
+            if (Object.prototype.hasOwnProperty.call(parsed, 'params')) req.params = parsed.params;
+            if (Object.prototype.hasOwnProperty.call(parsed, 'query')) req.query = parsed.query;
+        }
 
         next();
     } catch (err) {
         const status = err.status || 422;
         return res.status(status).json({
-            error: 'Validação falhou',
-            details: err.details || [{ message: err.message }]
+            sucesso: false,
+            mensagem: 'Validação falhou',
+            detalhes: err.details || [{ message: err.message }],
         });
     }
 };

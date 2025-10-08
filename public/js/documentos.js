@@ -1,13 +1,39 @@
+/**
+ * public/js/documentos.js
+ * ----------------------------------------
+ * Frontend de Documentos — SaaS multi-tenant.
+ * - Envia sempre o cabeçalho `x-tenant-id` (lido do cookie `tenant_id`)
+ * - Autocomplete de clientes (busca em /api/clientes/documentos)
+ * - Geração em lote dos DOCX (POST /api/documentos/gerar)
+ * - Lista de clientes (fallback)
+ */
+
 let clientes = [];
 let dadosClienteSelecionado = null;
 
-// CARREGAR LISTA DE CLIENTES
+/* =============== helpers de tenant/cookies =============== */
+function getCookie(name) {
+  const m = document.cookie.match(
+    new RegExp('(?:^|; )' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '=([^;]*)')
+  );
+  return m ? decodeURIComponent(m[1]) : null;
+}
+function getTenantHeaders() {
+  const t = getCookie('tenant_id');
+  return { 'x-tenant-id': t || '' };
+}
+
+/* =============== LISTA COMPLETA (fallback) =============== */
 async function carregarClientes() {
   try {
-    const response = await fetch('/api/clientes');
+    const response = await fetch('/api/clientes', {
+      headers: { ...getTenantHeaders() },
+      credentials: 'same-origin',
+    });
     clientes = await response.json();
 
     const select = document.getElementById('cliente_id');
+    if (!select) return;
     select.innerHTML = '<option value="">Selecione um cliente...</option>';
 
     clientes.forEach(cliente => {
@@ -21,18 +47,17 @@ async function carregarClientes() {
   }
 }
 
-// CARREGAR DADOS DO CLIENTE PARA SER USADO NOS DOCUMENTOS SEREM GERADOS
 function carregarDadosCliente() {
-  const clienteId = document.getElementById('cliente_id').value;
+  const clienteId = document.getElementById('cliente_id')?.value;
   if (clienteId) {
-    dadosClienteSelecionado = clientes.find(c => c.id == clienteId);
+    dadosClienteSelecionado = clientes.find(c => String(c.id) === String(clienteId)) || null;
     console.log('Cliente selecionado:', dadosClienteSelecionado);
   } else {
     dadosClienteSelecionado = null;
   }
 }
 
-// GERAR OS 4 DOCUMENTOS - CONTRATO, DECLARAÇÃO, PROCURAÇÃO E FICHA
+/* =============== GERAR PACOTE DE DOCUMENTOS =============== */
 async function gerarDocumentos() {
   const form = document.getElementById('documentoForm');
   const box = document.getElementById('docs-resultado');
@@ -41,11 +66,10 @@ async function gerarDocumentos() {
     return;
   }
 
-  // injeta CSS uma única vez (sem estilos de copiar/abrir)
+  // injeta CSS uma única vez
   (function ensureDocsStyles() {
     if (document.getElementById('td-docs-styles')) return;
     const css = `
-    /* ======= Themis Data - Docs UI ======= */
     .td-card{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:14px;box-shadow:0 6px 20px rgba(2,6,23,.06)}
     .td-card-header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
     .td-card-title{font-weight:700;color:#0f172a;font-size:15px;margin:0;display:flex;align-items:center;gap:8px}
@@ -76,7 +100,7 @@ async function gerarDocumentos() {
 
   const get = (name) => (form.elements[name]?.value ?? '').trim();
 
-  // valida se o cliente foi realmente escolhido da lista
+  // valida cliente escolhido (do autocomplete)
   const cliente_id = (document.getElementById('cliente_id')?.value || '').trim();
   if (!cliente_id) {
     alert('Selecione um cliente da lista (autocomplete).');
@@ -84,7 +108,6 @@ async function gerarDocumentos() {
     return;
   }
 
-  // payload (mantém data em yyyy-mm-dd pro back formatar)
   const payload = {
     cliente_id,
     objeto_acao: get('objeto_acao'),
@@ -95,7 +118,7 @@ async function gerarDocumentos() {
     indicador: get('indicador'),
   };
 
-  // loading state e prevenção de duplo submit
+  // loading
   const submitBtn = form.querySelector('[type="submit"]');
   const prevBtnHTML = submitBtn?.innerHTML;
   if (submitBtn) {
@@ -114,7 +137,6 @@ async function gerarDocumentos() {
     </div>
   `;
 
-  // helpers locais
   const iconFor = (tipo = '') => {
     const t = tipo.toLowerCase();
     if (t.includes('procura')) return '🖋️';
@@ -127,7 +149,8 @@ async function gerarDocumentos() {
   try {
     const resp = await fetch('/api/documentos/gerar', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...getTenantHeaders() },
+      credentials: 'same-origin',
       body: JSON.stringify(payload),
     });
 
@@ -172,7 +195,6 @@ async function gerarDocumentos() {
         : `<p style="margin:8px 0 0;color:#64748b">Nenhum documento retornado.</p>`}
       </div>
     `;
-
   } catch (err) {
     console.error(err);
     box.innerHTML = `
@@ -191,7 +213,7 @@ async function gerarDocumentos() {
   }
 }
 
-// ======== Autocomplete Cliente ========
+/* =============== AUTOCOMPLETE DE CLIENTES =============== */
 const buscaEl = document.getElementById('clienteBusca');
 const idEl = document.getElementById('cliente_id');
 const listEl = document.getElementById('clienteSugestoes');
@@ -206,9 +228,9 @@ function renderSugestoes(items) {
   items.forEach((c, i) => {
     const li = document.createElement('li');
     li.innerHTML = `
-        <span class="sug-nome">${c.nome}</span>
-        <span class="sug-doc">${c.cpf_cnpj || ''}</span>
-      `;
+      <span class="sug-nome">${c.nome}</span>
+      <span class="sug-doc">${c.cpf_cnpj || ''}</span>
+    `;
     li.addEventListener('click', () => escolherCliente(c));
     li.addEventListener('mousemove', () => setActive(i));
     listEl.appendChild(li);
@@ -223,7 +245,6 @@ function setActive(i) {
   if (i >= 0 && i < lis.length) {
     lis[i].classList.add('active');
     activeIndex = i;
-    // garante visibilidade ao navegar com setas
     const el = lis[i];
     const top = el.offsetTop, bottom = top + el.offsetHeight;
     if (top < listEl.scrollTop) listEl.scrollTop = top;
@@ -234,25 +255,28 @@ function setActive(i) {
 
 function escolherCliente(c) {
   buscaEl.value = `${c.nome} - ${c.cpf_cnpj || ''}`.trim();
-  idEl.value = c.id;               // isso é o que o backend precisa
+  idEl.value = c.id; // backend usa este id
   listEl.hidden = true;
 }
 
-// ======== Utils ========
+/* debounce util */
 const debounce = (fn, ms = 300) => {
   let t;
   return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
 };
 
 const consultarClientes = debounce(async (term) => {
-  idEl.value = '';                 // limpa seleção ao digitar novamente
+  idEl.value = ''; // limpa seleção ao digitar
   if (!term || term.trim().length < 2) {
     renderSugestoes([]);
     return;
   }
   const q = encodeURIComponent(term.trim());
   try {
-    const resp = await fetch(`/api/clientes/documentos?q=${q}`);
+    const resp = await fetch(`/api/clientes/documentos?q=${q}`, {
+      headers: { ...getTenantHeaders() },
+      credentials: 'same-origin',
+    });
     sugestoes = await resp.json();
     renderSugestoes(sugestoes);
   } catch (e) {
@@ -261,12 +285,11 @@ const consultarClientes = debounce(async (term) => {
   }
 }, 300);
 
-buscaEl.addEventListener('input', (e) => consultarClientes(e.target.value));
+buscaEl?.addEventListener('input', (e) => consultarClientes(e.target.value));
 
-// Teclado: ↑/↓ navega, Enter escolhe, Esc fecha
-buscaEl.addEventListener('keydown', (e) => {
+buscaEl?.addEventListener('keydown', (e) => {
   if (listEl.hidden) return;
-  const max = sugestoes.length;
+  const max = sugestoes.length || 1;
   if (e.key === 'ArrowDown') { e.preventDefault(); setActive((activeIndex + 1) % max); }
   else if (e.key === 'ArrowUp') { e.preventDefault(); setActive((activeIndex - 1 + max) % max); }
   else if (e.key === 'Enter') {
@@ -279,19 +302,17 @@ buscaEl.addEventListener('keydown', (e) => {
   }
 });
 
-// Fecha lista ao clicar fora
+/* fecha lista ao clicar fora */
 document.addEventListener('click', (e) => {
-  if (!boxEl.contains(e.target)) listEl.hidden = true;
+  if (boxEl && !boxEl.contains(e.target)) listEl.hidden = true;
 });
 
-// ======== Validação antes de enviar ========
-// Garante que cliente_id esteja preenchido
+/* validação auxiliar se precisar usar no onsubmit */
 function validarClienteSelecionado() {
-  if (!idEl.value) {
+  if (!idEl?.value) {
     alert('Selecione um cliente da lista.');
-    buscaEl.focus();
+    buscaEl?.focus();
     return false;
   }
   return true;
 }
-

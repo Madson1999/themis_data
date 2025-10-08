@@ -2,9 +2,9 @@
  * config/documentos.js
  * ----------------------------------------
  * Geração de documentos .docx a partir de templates:
- * - gerarPacoteDocumentos(payload): gera DOCUMENTO/CONTRATO, DECLARAÇÃO, FICHA e PROCURAÇÃO de uma vez
+ * - gerarPacoteDocumentos(payload): gera CONTRATO, DECLARAÇÃO, FICHA e PROCURAÇÃO de uma vez
  *
- * Delimitadores no .docx: [[CHAVE]]  (ajuste para {{CHAVE}} removendo a opção "delimiters" no Docxtemplater)
+ * Delimitadores no .docx: [[CHAVE]]
  * Tags suportadas:
  *  [[NOME_CLIENTE]], [[CPF_CNPJ]], [[ENDERECO_COMPLETO]], [[TELEFONE]], [[EMAIL]],
  *  [[DATA_ATUAL]], [[NUMERO_DOCUMENTO]], [[RG]], [[NACIONALIDADE]],
@@ -30,8 +30,16 @@ function paraPtBr(isoOrBr) {
     if (isNaN(d)) return '';
     return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
   }
-  // se já vier "02 de outubro de 2025", mantém
-  return isoOrBr;
+  return isoOrBr; // já vem formatado
+}
+
+// evita caracteres ruins no nome do arquivo
+function safeName(s, fallback = 'documento') {
+  const base = String(s || fallback)
+    .replace(/[\/\\?%*:|"<>]/g, '-') // proibidos no Windows/macOS
+    .replace(/\s+/g, ' ')
+    .trim();
+  return base || fallback;
 }
 
 /** Monta objeto de dados para o template */
@@ -111,31 +119,40 @@ async function renderizarDocx(templatePath, data) {
   return doc.getZip().generate({ type: 'nodebuffer' });
 }
 
-/** Garante pasta destino: /public/documentos/gerados/YYYY/MM */
-async function prepararPastaDestino() {
+/** Garante pasta destino: /public/documentos/gerados/<tenantId>/YYYY/MM */
+async function prepararPastaDestino(tenantId) {
+  const tId = Number(tenantId);
+  if (!Number.isFinite(tId) || tId <= 0) {
+    throw new Error('tenant_id inválido ou ausente para geração de documentos');
+  }
+
   const agora = new Date();
-  const ano = agora.getFullYear();
+  const ano = String(agora.getFullYear());
   const mes = String(agora.getMonth() + 1).padStart(2, '0');
+
   const pastaMes = path.join(
     __dirname,
     '../../public/documentos/gerados',
-    String(ano),
+    String(tId),
+    ano,
     mes
   );
   await fs.ensureDir(pastaMes);
-  return { ano, mes, pastaMes };
+  return { ano, mes, pastaMes, tenantId: tId };
 }
 
 /**
  * Gera o PACOTE de documentos a partir do mesmo payload:
- * - DOCUMENTO/CONTRATO (DOCUMENTO.docx)
+ * - CONTRATO (CONTRATO.docx)
  * - DECLARAÇÃO (DECLARACAO.docx)
  * - FICHA (FICHA.docx)
  * - PROCURAÇÃO (PROCURACAO.docx)
  *
  * Espera no "dados":
  *  {
- *    cliente, objeto_acao, numero_documento?, requerido?, atendido_por?, data_atendimento?, indicador?
+ *    tenant_id|id_tenant|tenantId,   // ← OBRIGATÓRIO no SaaS
+ *    cliente, objeto_acao, tipo_acao,
+ *    numero_documento?, requerido?, atendido_por?, data_atendimento?, indicador?
  *  }
  */
 async function gerarPacoteDocumentos(dados) {
@@ -149,9 +166,15 @@ async function gerarPacoteDocumentos(dados) {
       atendido_por = '',
       data_atendimento = '',
       indicador = '',
-    } = dados;
+    } = dados || {};
 
-    // monta todas as chaves pro template (inclui novos campos)
+    // aceita tenant_id, id_tenant ou tenantId
+    const tenantId =
+      dados?.tenant_id ?? dados?.id_tenant ?? dados?.tenantId;
+
+    const { ano, mes, pastaMes, tenantId: tId } = await prepararPastaDestino(tenantId);
+
+    // monta todas as chaves pro template
     const dataTemplate = montarDadosTemplate({
       cliente,
       numero_documento,
@@ -163,7 +186,7 @@ async function gerarPacoteDocumentos(dados) {
       indicador,
     });
 
-    // Ajuste esses nomes conforme seus arquivos reais na pasta "public/documentos/modelos"
+    // Ajuste os nomes conforme os arquivos em public/documentos/modelos
     const modelos = [
       { modelo: 'CONTRATO.docx', rotulo: 'CONTRATO' },
       { modelo: 'DECLARACAO.docx', rotulo: 'DECLARACAO' },
@@ -171,9 +194,9 @@ async function gerarPacoteDocumentos(dados) {
       { modelo: 'PROCURACAO.docx', rotulo: 'PROCURACAO' },
     ];
 
-    const { ano, mes, pastaMes } = await prepararPastaDestino();
-
+    const numSafe = safeName(numero_documento, String(Date.now()));
     const resultados = [];
+
     for (const item of modelos) {
       const templatePath = path.join(
         __dirname,
@@ -183,7 +206,7 @@ async function gerarPacoteDocumentos(dados) {
 
       const buf = await renderizarDocx(templatePath, dataTemplate);
 
-      const nomeArquivo = `${item.rotulo} - ${numero_documento}.docx`;
+      const nomeArquivo = `${item.rotulo} - ${numSafe}.docx`;
       const caminhoArquivo = path.join(pastaMes, nomeArquivo);
       await fs.writeFile(caminhoArquivo, buf);
 
@@ -192,13 +215,14 @@ async function gerarPacoteDocumentos(dados) {
         sucesso: true,
         caminho: caminhoArquivo,
         nomeArquivo,
-        url: `/documentos/gerados/${ano}/${mes}/${nomeArquivo}`,
+        url: `/documentos/gerados/${tId}/${ano}/${mes}/${nomeArquivo}`,
       });
     }
 
     return {
       sucesso: true,
-      numero_documento,
+      tenant_id: tId,
+      numero_documento: numSafe,
       documentos: resultados,
     };
   } catch (error) {

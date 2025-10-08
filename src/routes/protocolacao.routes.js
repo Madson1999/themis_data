@@ -1,7 +1,7 @@
 /**
  * routes/protocolacao.routes.js
  * ----------------------------------------
- * Protocolação (pós-aprovação)
+ * Protocolação (pós-aprovação) — multi-tenant
  *
  * Base path (montada no app): /api/protocolacao
  *
@@ -11,12 +11,28 @@
  * - DELETE /:id/devolver     → Devolver ação (limpar `data_aprovado`)
  * - GET    /:id/arquivos     → Listar arquivos da ação
  * - GET    /:id/arquivo      → Baixar arquivo individual (?nome=)
+ *
+ * Regras SaaS:
+ * - Exige identificação do tenant (cookie `tenant_id` ou header `x-tenant-id`) em todas as rotas
  */
 
 const { Router } = require('express');
 const c = require('../controllers/protocolacao.controller');
 
 const router = Router();
+
+/** Middleware local: exige tenant_id (cookie ou header) em todas as rotas abaixo */
+function ensureTenant(req, res, next) {
+    const fromCookie = req.cookies?.tenant_id;
+    const fromHeader = req.headers['x-tenant-id'];
+    const t = Number(fromCookie ?? fromHeader);
+    if (!Number.isFinite(t) || t <= 0) {
+        return res.status(401).json({ sucesso: false, mensagem: 'Tenant não identificado' });
+    }
+    next();
+}
+
+router.use(ensureTenant);
 
 /** Validação básica do :id (opcional, mas recomendado) */
 router.param('id', (req, res, next, id) => {

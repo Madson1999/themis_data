@@ -6,121 +6,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Login</title>
 
-  <!-- Incluir estilos compartilhados -->
   <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/login.css">
 
-   <style>
-    :root{
-      --radius: 12px;
-      --spacing: 2.5rem;
-      --brand: #007bff;
-      --brand-dark: #0056b3;
-    }
 
-    /* Base */
-    html, body {
-      height: 100%;
-    }
-    body {
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      background:
-        linear-gradient(rgba(0,0,0,.5), rgba(0,0,0,.5)),
-        url('images/background.png') center / cover no-repeat #0b0b0b;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 100dvh; /* melhor em mobile que 100vh */
-      margin: 0;
-      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
-    }
-
-    /* Card de login */
-    .login-container {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      width: min(420px, 92vw);          /* fluido em telas pequenas */
-      padding: var(--spacing);
-      border-radius: var(--radius);
-      box-shadow: 0 8px 32px rgba(0,0,0,.25);
-    }
-
-    .logo-container {
-      text-align: center;
-      margin-bottom: 1.25rem;
-    }
-    .logo {
-      width: min(70%, 320px);           /* reduz em telas pequenas */
-      height: auto;
-      display: block;
-      margin: -.75rem auto 0;           /* leve subida */
-    }
-
-    /* Form */
-    form { margin: 0; }
-
-    input, button {
-      font-size: clamp(.95rem, 2.5vw, 1rem);
-    }
-
-    input {
-      display: block;
-      width: 100%;
-      margin-bottom: 1rem;
-      padding: .9rem .95rem;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      box-sizing: border-box;
-      background: #fff;
-    }
-    input:focus {
-      outline: none;
-      border-color: var(--brand);
-      box-shadow: 0 0 0 2px rgba(0,123,255,.25);
-    }
-
-    button {
-      width: 100%;
-      padding: .9rem 1rem;
-      background: var(--brand);
-      color: #fff;
-      border: 0;
-      border-radius: 8px;
-      cursor: pointer;
-      font-weight: 700;
-      transition: filter .2s ease;
-      touch-action: manipulation;
-    }
-    button:hover { filter: brightness(.95); }
-    button:active { filter: brightness(.9); }
-
-    .mensagem {
-      color: #d93025;
-      margin: .25rem 0 1rem;
-      text-align: center;
-      font-size: .95rem;
-      min-height: 1.25rem; /* evita pulo de layout quando aparecer texto */
-    }
-    .mensagem.sucesso { color: #28a745; }
-
-    /* Ajustes para telas muito pequenas */
-    @media (max-width: 480px) {
-      :root{ --spacing: 1.25rem; }
-      .login-container { box-shadow: 0 6px 20px rgba(0,0,0,.2); }
-      .logo { width: min(78%, 280px); margin-top: -.5rem; }
-      input, button { border-radius: 10px; }
-    }
-
-    /* Telas extra pequenas (ex.: 320px) */
-    @media (max-width: 360px) {
-      .logo { width: 82%; }
-      input, button { padding: .8rem .85rem; }
-    }
-
-    /* Acessibilidade: reduzir animações se preferido */
-    @media (prefers-reduced-motion: reduce) {
-      * { transition: none !important; }
-    }
-  </style>
 </head>
 
 <body>
@@ -135,37 +24,8 @@
       <button type="submit">Entrar</button>
     </form>
   </div>
-  <script>
-    document.getElementById('loginForm').addEventListener('submit', async function (e) {
-      e.preventDefault();
-      const email = document.getElementById('email').value;
-      const senha = document.getElementById('senha').value;
-      const mensagem = document.getElementById('mensagem');
-      mensagem.textContent = '';
-      mensagem.className = 'mensagem';
 
-      try {
-        const resposta = await fetch('/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, senha }),
-          credentials: 'include' // <- ESSENCIAL!
-        });
-        const dados = await resposta.json();
-        if (dados.sucesso) {
-          mensagem.className = 'mensagem sucesso';
-          mensagem.textContent = dados.mensagem;
-          setTimeout(() => {
-            window.location.href = dados.redirect || '/menu';
-          }, 1000);
-        } else {
-          mensagem.textContent = dados.mensagem;
-        }
-      } catch (err) {
-        mensagem.textContent = 'Erro ao conectar ao servidor.';
-      }
-    });
-  </script>
+  <script src="/js/login.js"></script>
 </body>
 
 </html>

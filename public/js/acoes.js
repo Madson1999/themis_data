@@ -1,28 +1,47 @@
-// Alterna entre as abas
+/**
+ * public/js/acoes.js
+ * ----------------------------------------
+ * Frontend de Ações (Kanban) — SaaS multi-tenant.
+ *
+ * - Envia sempre o cabeçalho `x-tenant-id` (lido do cookie `tenant_id`)
+ * - Carrega Kanban (acompanhar / corrigir)
+ * - Criação de ação com múltiplos uploads
+ * - Modal de arquivos + mudança de status/designado/complexidade
+ * - Máscaras e UX de uploads
+ */
+
+/* ===================== Tenant helpers ===================== */
+function getCookie(name) {
+    const m = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()[\]\\/+^])/g, '\\$1') + '=([^;]*)'));
+    return m ? decodeURIComponent(m[1]) : null;
+}
+function getTenantHeaders() {
+    const t = getCookie('tenant_id');
+    return { 'x-tenant-id': t || '' };
+}
+
+/* ===================== Abas ===================== */
 function mostrarAba(aba) {
     document.getElementById('aba-criar').style.display = aba === 'criar' ? 'block' : 'none';
     document.getElementById('aba-acompanhar').style.display = aba === 'acompanhar' ? 'block' : 'none';
     document.getElementById('aba-corrigir').style.display = aba === 'corrigir' ? 'block' : 'none';
 
-    // Opcional: destaque visual no botão ativo
     document.querySelectorAll('.aba-btn').forEach(btn => btn.classList.remove('ativo'));
     if (aba === 'criar') document.querySelectorAll('.aba-btn')[0].classList.add('ativo');
     if (aba === 'acompanhar') document.querySelectorAll('.aba-btn')[1].classList.add('ativo');
     if (aba === 'corrigir') document.querySelectorAll('.aba-btn')[2].classList.add('ativo');
 
-    // Carregar kanban quando a aba for aberta
-    if (aba === 'acompanhar') {
-        carregarKanban();
-    }
-    if (aba === 'corrigir') {
-        carregarKanbanCorrigir();
-    }
+    if (aba === 'acompanhar') carregarKanban();
+    if (aba === 'corrigir') carregarKanbanCorrigir();
 }
 
-// Função para carregar o kanban
+/* ===================== Kanban (acompanhar) ===================== */
 async function carregarKanban() {
     try {
-        const response = await fetch('/api/acoes');
+        const response = await fetch('/api/acoes', {
+            headers: { ...getTenantHeaders() },
+            credentials: 'same-origin',
+        });
         const acoesPorDesignado = await response.json();
 
         const kanbanBoard = document.getElementById('kanbanBoard');
@@ -38,27 +57,24 @@ async function carregarKanban() {
 
         designados.forEach(designado => {
             const acoes = acoesPorDesignado[designado] || [];
+            const acoesFiltradas = acoes.filter(a => (a.status || '').toLowerCase() !== 'finalizado'); // ignora finalizados
+            if (!acoesFiltradas.length) return;
 
-            // ✅ filtra finalizados ANTES
-            const acoesFiltradas = acoes.filter(a => a.status?.toLowerCase() !== 'finalizado');
-            if (acoesFiltradas.length === 0) return; // nada a mostrar p/ esse designado
-
-            const coluna = criarColunaKanban(designado, acoesFiltradas); // já filtrado
+            const coluna = criarColunaKanban(designado, acoesFiltradas);
             kanbanBoard.appendChild(coluna);
             colunasRenderizadas++;
         });
 
         if (colunasRenderizadas === 0) {
-            kanbanBoard.innerHTML = '<p style="text-align: center; color: #666; grid-column: 1 / -1;">Nenhuma ação encontrada</p>';
+            kanbanBoard.innerHTML = '<p style="text-align:center;color:#666;grid-column:1/-1;">Nenhuma ação encontrada</p>';
         }
     } catch (error) {
         console.error('Erro ao carregar kanban:', error);
         document.getElementById('kanbanBoard').innerHTML =
-            '<p style="text-align: center; color: #dc3545;">Erro ao carregar ações</p>';
+            '<p style="text-align:center;color:#dc3545;">Erro ao carregar ações</p>';
     }
 }
 
-// Função para criar uma coluna do kanban
 function criarColunaKanban(designado, acoesFiltradas) {
     const coluna = document.createElement('div');
     coluna.className = 'kanban-column';
@@ -72,14 +88,13 @@ function criarColunaKanban(designado, acoesFiltradas) {
 
     const count = document.createElement('div');
     count.className = 'kanban-column-count';
-    count.textContent = acoesFiltradas.length; // contagem real
+    count.textContent = acoesFiltradas.length;
 
     header.appendChild(title);
     header.appendChild(count);
 
     const cardsContainer = document.createElement('div');
     cardsContainer.className = 'kanban-cards';
-
     acoesFiltradas.forEach(acao => cardsContainer.appendChild(criarCardAcao(acao)));
 
     coluna.appendChild(header);
@@ -87,50 +102,66 @@ function criarColunaKanban(designado, acoesFiltradas) {
     return coluna;
 }
 
-// Função para criar um card de ação
+function formatComplexidade(c) {
+    const v = String(c || '').toLowerCase();
+    if (v === 'baixa' || v === 'baixo') return 'Baixa';
+    if (v === 'media' || v === 'média' || v === 'medio' || v === 'médio') return 'Média';
+    if (v === 'alta' || v === 'alto') return 'Alta';
+    // já pode vir capitalizada do backend
+    return c || 'Baixa';
+}
+
 function criarCardAcao(acao) {
     const card = document.createElement('div');
     card.className = 'kanban-card';
     card.onclick = () => abrirDetalhesAcao(acao.id);
 
-    const statusClass = acao.status.replace(/\s+/g, '-').toLowerCase();
+    const statusClass = (acao.status || '').replace(/\s+/g, '-').toLowerCase();
     const dataFormatada = new Date(acao.data_criacao).toLocaleDateString('pt-BR');
 
     card.innerHTML = `
-        <div class="kanban-card-title">${acao.titulo}</div>
-        <div class="kanban-card-cliente">👤 ${acao.cliente}</div>
-        <div class="kanban-card-status status-${statusClass}">
-        ${acao.status} - Nível ${({ baixa: 'Baixo', media: 'Médio', alta: 'Alto' }[acao.complexidade])}
-        </div>
-        <div class="kanban-card-meta">
-          <span class="kanban-card-criador">Por: ${acao.criador}</span>
-          <span class="kanban-card-data">${dataFormatada}</span>
-        </div>
-      `;
-
+    <div class="kanban-card-title">${acao.titulo}</div>
+    <div class="kanban-card-cliente">👤 ${acao.cliente}</div>
+    <div class="kanban-card-status status-${statusClass}">
+      ${acao.status} - Nível ${formatComplexidade(acao.complexidade)}
+    </div>
+    <div class="kanban-card-meta">
+      <span class="kanban-card-criador">Por: ${acao.criador}</span>
+      <span class="kanban-card-data">${dataFormatada}</span>
+    </div>
+  `;
     return card;
 }
 
-// Função para abrir detalhes da ação (placeholder)
+/* ===================== Modal (acompanhar) ===================== */
 async function abrirDetalhesAcao(acaoId) {
-    // Buscar arquivos e status da ação pela nova rota
     try {
-        // Buscar arquivos
-        const respArq = await fetch(`/api/acoes/arquivos/${acaoId}`);
+        const [respArq, respStatus] = await Promise.all([
+            fetch(`/api/acoes/arquivos/${acaoId}`, { headers: { ...getTenantHeaders() }, credentials: 'same-origin' }),
+            fetch(`/api/acoes/status/${acaoId}`, { headers: { ...getTenantHeaders() }, credentials: 'same-origin' }),
+        ]);
         const arquivosPorTipo = await respArq.json();
-        // Buscar status
-        const respStatus = await fetch(`/api/acoes/status/${acaoId}`);
         const dadosStatus = await respStatus.json();
-        mostrarModalDocumentosAcompanhamento(acaoId, arquivosPorTipo, dadosStatus.status, false, dadosStatus.complexidade);
-    } catch (e) {
+        mostrarModalDocumentosAcompanhamento(
+            acaoId,
+            arquivosPorTipo,
+            dadosStatus.status,
+            false,
+            dadosStatus.complexidade
+        );
+    } catch (_e) {
         alert('Erro ao buscar arquivos ou status da ação.');
     }
 }
 
-// Função para carregar o kanban de corrigir ações (apenas finalizadas)
+/* ===================== Kanban (corrigir) ===================== */
 async function carregarKanbanCorrigir() {
     try {
-        const response = await fetch('/api/acoes?status=finalizado');
+        // Usa status com capitalização exata para coincidir com o backend
+        const response = await fetch('/api/acoes?status=Finalizado', {
+            headers: { ...getTenantHeaders() },
+            credentials: 'same-origin',
+        });
         const acoesPorDesignado = await response.json();
 
         const kanbanBoard = document.getElementById('kanbanBoardCorrigir');
@@ -146,9 +177,8 @@ async function carregarKanbanCorrigir() {
 
         designados.forEach(designado => {
             const acoes = acoesPorDesignado[designado] || [];
-            // ✅ ignora aprovadas ANTES
-            const acoesFiltradas = acoes.filter(acao => !acao.data_aprovado);
-            if (acoesFiltradas.length === 0) return;
+            const acoesFiltradas = acoes.filter(acao => !acao.data_aprovado); // ignora já aprovadas
+            if (!acoesFiltradas.length) return;
 
             const coluna = criarColunaKanbanCorrigir(designado, acoesFiltradas);
             kanbanBoard.appendChild(coluna);
@@ -157,15 +187,14 @@ async function carregarKanbanCorrigir() {
 
         if (colunasRenderizadas === 0) {
             kanbanBoard.innerHTML =
-                '<p style="text-align: center; color: #666; grid-column: 1 / -1;">Nenhuma ação finalizada para corrigir</p>';
+                '<p style="text-align:center;color:#666;grid-column:1/-1;">Nenhuma ação finalizada para corrigir</p>';
         }
-    } catch (error) {
+    } catch (_e) {
         document.getElementById('kanbanBoardCorrigir').innerHTML =
-            '<p style="text-align: center; color: #dc3545;">Erro ao carregar ações</p>';
+            '<p style="text-align:center;color:#dc3545;">Erro ao carregar ações</p>';
     }
 }
 
-// Coluna e card para corrigir (idêntico, mas chama modalCorrigir)
 function criarColunaKanbanCorrigir(designado, acoesFiltradas) {
     const coluna = document.createElement('div');
     coluna.className = 'kanban-column';
@@ -179,7 +208,7 @@ function criarColunaKanbanCorrigir(designado, acoesFiltradas) {
 
     const count = document.createElement('div');
     count.className = 'kanban-column-count';
-    count.textContent = acoesFiltradas.length; // contagem real
+    count.textContent = acoesFiltradas.length;
 
     header.appendChild(title);
     header.appendChild(count);
@@ -191,16 +220,21 @@ function criarColunaKanbanCorrigir(designado, acoesFiltradas) {
         const card = document.createElement('div');
         card.className = 'kanban-card';
         card.onclick = () => abrirDetalhesAcaoCorrigir(acao.id);
-        const statusClass = acao.status.replace(/\s+/g, '-').toLowerCase();
+
+        const statusClass = (acao.status || '').replace(/\s+/g, '-').toLowerCase();
         const dataFormatada = new Date(acao.data_criacao).toLocaleDateString('pt-BR');
+
         card.innerHTML = `
       <div class="kanban-card-title">${acao.titulo}</div>
       <div class="kanban-card-cliente">👤 ${acao.cliente}</div>
-      <div class="kanban-card-status status-${statusClass}">${acao.status} - Nível ${acao.complexidade}</div>
+      <div class="kanban-card-status status-${statusClass}">
+        ${acao.status} - Nível ${formatComplexidade(acao.complexidade)}
+      </div>
       <div class="kanban-card-meta">
         <span class="kanban-card-criador">Por: ${acao.criador}</span>
         <span class="kanban-card-data">${dataFormatada}</span>
-      </div>`;
+      </div>
+    `;
         cardsContainer.appendChild(card);
     });
 
@@ -209,31 +243,36 @@ function criarColunaKanbanCorrigir(designado, acoesFiltradas) {
     return coluna;
 }
 
-// Modal de corrigir ação (idêntico, mas com botão Aprovar)
 async function abrirDetalhesAcaoCorrigir(acaoId) {
-    // Buscar arquivos e status da ação pela nova rota
     try {
-        // Buscar arquivos
-        const respArq = await fetch(`/api/acoes/arquivos/${acaoId}`);
+        const [respArq, respStatus] = await Promise.all([
+            fetch(`/api/acoes/arquivos/${acaoId}`, { headers: { ...getTenantHeaders() }, credentials: 'same-origin' }),
+            fetch(`/api/acoes/status/${acaoId}`, { headers: { ...getTenantHeaders() }, credentials: 'same-origin' }),
+        ]);
         const arquivosPorTipo = await respArq.json();
-        // Buscar status
-        const respStatus = await fetch(`/api/acoes/status/${acaoId}`);
         const dadosStatus = await respStatus.json();
-        mostrarModalDocumentosAcompanhamento(acaoId, arquivosPorTipo, dadosStatus.status, true, dadosStatus.complexidade);
-    } catch (e) {
+        mostrarModalDocumentosAcompanhamento(
+            acaoId,
+            arquivosPorTipo,
+            dadosStatus.status,
+            true,
+            dadosStatus.complexidade
+        );
+    } catch (_e) {
         alert('Erro ao buscar arquivos ou status da ação.');
     }
 }
 
+/* ===================== Modal base (acompanhar/corrigir) ===================== */
 function mostrarModalDocumentosAcompanhamento(acaoId, arquivosPorTipo, statusAtual, modoCorrigir, complexidadeAtual) {
     const modal = document.getElementById('modalDocumentos');
     const lista = document.getElementById('modalDocsLista');
     lista.innerHTML = '';
 
-    // Campo de status editável na mesma linha do título do modal
     const modalContent = document.querySelector('.modal-docs-content');
     let headerRow = document.getElementById('modalDocsHeaderRow');
     if (headerRow) headerRow.remove();
+
     headerRow = document.createElement('div');
     headerRow.id = 'modalDocsHeaderRow';
     headerRow.style.display = 'flex';
@@ -242,41 +281,42 @@ function mostrarModalDocumentosAcompanhamento(acaoId, arquivosPorTipo, statusAtu
     headerRow.style.width = '100%';
     headerRow.style.marginBottom = '1.2rem';
     headerRow.innerHTML = `
-        <h3 style='margin:0;color:#4953b8;font-size:1.25rem;font-weight:600;'>Documentos da Ação</h3>
+    <h3 style='margin:0;color:#4953b8;font-size:1.25rem;font-weight:600;'>Documentos da Ação</h3>
+    <div style='display:flex;align-items:center;gap:1rem;'>
+      <span style="font-size:1.1rem;font-weight:600;color:#4953b8;">Designado:</span>
+      <select id="modalDesignadoSelect" style="padding:0.4rem 1rem;border-radius:6px;font-size:1rem;min-width:120px;"></select>
 
-        <div style='display:flex;align-items:center;gap:1rem;'>
-          <span style="font-size:1.1rem;font-weight:600;color:#4953b8;">Designado:</span>
-          <select id="modalDesignadoSelect" style="padding:0.4rem 1rem;border-radius:6px;font-size:1rem;min-width:120px;"></select>
+      <span style="font-size:1.1rem;font-weight:600;color:#4953b8;">Complexidade:</span>
+      <select id="modalComplexidadeSelect" style="padding:0.4rem 1rem;border-radius:6px;font-size:1rem;">
+        <option value="baixa">Baixa</option>
+        <option value="media">Média</option>
+        <option value="alta">Alta</option>
+      </select>
 
-          <span style="font-size:1.1rem;font-weight:600;color:#4953b8;">Complexidade:</span>
-          <select id="modalComplexidadeSelect" style="padding:0.4rem 1rem;border-radius:6px;font-size:1rem;">
-            <option value="baixa">Baixa</option>
-            <option value="media">Média</option>
-            <option value="alta">Alta</option>
-          </select>
+      <span style="font-size:1.1rem;font-weight:600;color:#4953b8;">Status:</span>
+      <select id="modalStatusSelect" style="padding:0.4rem 1rem;border-radius:6px;font-size:1rem;">
+        <option value="Não iniciado">Não iniciado</option>
+        <option value="Em andamento">Em andamento</option>
+        ${modoCorrigir ? '<option value="Devolvido">Devolvido</option>' : ''}
+        <option value="Finalizado">Finalizado</option>
+      </select>
 
-          <span style="font-size:1.1rem;font-weight:600;color:#4953b8;">Status:</span>
-          <select id="modalStatusSelect" style="padding:0.4rem 1rem;border-radius:6px;font-size:1rem;">
-            <option value="Não iniciado">Não iniciado</option>
-            <option value="Em andamento">Em andamento</option>
-            ${modoCorrigir ? '<option value="Devolvido">Devolvido</option>' : ''}
-            <option value="Finalizado">Finalizado</option>
-          </select>
+      <button id="modalStatusSalvar" class="modal-docs-upload-btn" style="padding:0.4rem 1.2rem;">Salvar</button>
+      ${modoCorrigir ? `<button id="modalAprovar" class="modal-docs-upload-btn" style="padding:0.4rem 1.2rem;background:#28a745;">Aprovar</button>` : ''}
 
-          <button id="modalStatusSalvar" class="modal-docs-upload-btn" style="padding:0.4rem 1.2rem;">Salvar</button>
-          ${modoCorrigir ? `<button id="modalAprovar" class="modal-docs-upload-btn" style="padding:0.4rem 1.2rem;background:#28a745;">Aprovar</button>` : ''}
-
-          <span id="modalStatusMsg" style="margin-left:0.7rem;font-size:0.98rem;"></span>
-        </div>
-      `;
+      <span id="modalStatusMsg" style="margin-left:0.7rem;font-size:0.98rem;"></span>
+    </div>
+  `;
     modalContent.insertBefore(headerRow, modalContent.querySelector('#modalDocsLista'));
 
-    // Exibir comentário se existir e não for modo de correção
+    // Comentário do revisor (somente acompanhar)
     let comentarioInfo = document.getElementById('modalComentarioInfo');
     if (comentarioInfo) comentarioInfo.remove();
     if (!modoCorrigir) {
-        // Buscar o comentário da ação
-        fetch(`/api/acoes/comentario/${acaoId}`)
+        fetch(`/api/acoes/comentario/${acaoId}`, {
+            headers: { ...getTenantHeaders() },
+            credentials: 'same-origin',
+        })
             .then(r => r.json())
             .then(data => {
                 if (data.comentario) {
@@ -296,7 +336,7 @@ function mostrarModalDocumentosAcompanhamento(acaoId, arquivosPorTipo, statusAtu
             });
     }
 
-    // Adicionar campo de comentário se for modo de correção
+    // Caixa de comentário (somente corrigir, quando devolvendo)
     let comentarioBox = document.getElementById('modalComentarioBox');
     if (comentarioBox) comentarioBox.remove();
     if (modoCorrigir) {
@@ -305,70 +345,71 @@ function mostrarModalDocumentosAcompanhamento(acaoId, arquivosPorTipo, statusAtu
         comentarioBox.style.width = '100%';
         comentarioBox.style.marginBottom = '1rem';
         comentarioBox.innerHTML = `
-          <label for="modalComentario" style="font-weight:600;color:#4953b8;">Comentário para devolução:</label>
-          <textarea id="modalComentario" rows="3" style="width:100%;border-radius:6px;border:1px solid #d1d5db;padding:0.7rem;font-size:1rem;margin-top:0.3rem;"></textarea>
-          <small style="color:#888;">(Preencha este campo ao devolver para o estagiário)</small>
-        `;
+      <label for="modalComentario" style="font-weight:600;color:#4953b8;">Comentário para devolução:</label>
+      <textarea id="modalComentario" rows="3" style="width:100%;border-radius:6px;border:1px solid #d1d5db;padding:0.7rem;font-size:1rem;margin-top:0.3rem;"></textarea>
+      <small style="color:#888;">(Preencha ao devolver para o estagiário)</small>
+    `;
         modalContent.insertBefore(comentarioBox, modalContent.querySelector('#modalDocsLista'));
     }
 
-    // Preencher lista de designados
-    fetch('/api/usuarios/designados').then(r => r.json()).then(designados => {
-        const select = document.getElementById('modalDesignadoSelect');
-        select.innerHTML = '<option value="Nenhum">Nenhum</option>';
-        designados.forEach(e => {
-            const opt = document.createElement('option');
-            opt.value = e.nome;
-            opt.textContent = e.nome;
-            select.appendChild(opt);
+    // Preenche designados (nomes — updateStatus espera o nome no backend)
+    fetch('/api/usuarios/designados', { headers: { ...getTenantHeaders() }, credentials: 'same-origin' })
+        .then(r => r.json())
+        .then(designados => {
+            const select = document.getElementById('modalDesignadoSelect');
+            select.innerHTML = '<option value="Nenhum">Nenhum</option>';
+            designados.forEach(e => {
+                const opt = document.createElement('option');
+                opt.value = e.nome;
+                opt.textContent = e.nome;
+                select.appendChild(opt);
+            });
+            select.value = window.__modalDesignadoAtual || 'Nenhum';
         });
-        // Setar valor atual
-        select.value = window.__modalDesignadoAtual || 'Nenhum';
-    });
-    // Setar valor atual do status
-    + setTimeout(() => {
-        document.getElementById('modalStatusSelect').value = statusAtual;
+
+    setTimeout(() => {
+        document.getElementById('modalStatusSelect').value = statusAtual || 'Não iniciado';
         const selComp = document.getElementById('modalComplexidadeSelect');
-        if (selComp) {
-            selComp.value = complexidadeAtual;
-        }
+        if (selComp) selComp.value = (String(complexidadeAtual || 'baixa')).toLowerCase();
     }, 50);
-    // Salvar status/designado/arquivo
+
+    // Salvar (status/designado/complexidade + uploads)
     document.getElementById('modalStatusSalvar').onclick = async () => {
         const novoStatus = document.getElementById('modalStatusSelect').value;
         const novoDesignado = document.getElementById('modalDesignadoSelect').value;
         const novaComplexidade = document.getElementById('modalComplexidadeSelect').value;
         const msg = document.getElementById('modalStatusMsg');
         msg.textContent = 'Salvando...';
-        let statusOk = false;
-        // Se for modo de correção e status está saindo de finalizado, enviar comentário
-        let comentarioEnviado = false;
-        let comentario = '';
+
+        // se estiver em correção e tirando de Finalizado → exige comentário
         if (modoCorrigir && statusAtual === 'Finalizado' && novoStatus !== 'Finalizado') {
-            comentario = document.getElementById('modalComentario').value.trim();
-            if (comentario.length > 0) {
-                const respComentario = await fetch(`/api/acoes/comentario/${acaoId}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ comentario })
-                });
-                comentarioEnviado = respComentario.ok;
-            } else {
+            const comentario = (document.getElementById('modalComentario')?.value || '').trim();
+            if (!comentario) {
                 msg.textContent = 'Por favor, escreva um comentário para devolução.';
                 return;
             }
+            const respComentario = await fetch(`/api/acoes/comentario/${acaoId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...getTenantHeaders() },
+                credentials: 'same-origin',
+                body: JSON.stringify({ comentario }),
+            });
+            if (!respComentario.ok) {
+                msg.textContent = 'Erro ao salvar comentário.';
+                return;
+            }
         }
-        // Salvar status e designado
+
+        // Salva status/designado/complexidade
         const resp = await fetch(`/api/acoes/status/${acaoId}`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: novoStatus, designado: novoDesignado, complexidade: novaComplexidade })
+            headers: { 'Content-Type': 'application/json', ...getTenantHeaders() },
+            credentials: 'same-origin',
+            body: JSON.stringify({ status: novoStatus, designado: novoDesignado, complexidade: novaComplexidade }),
         });
-        if (resp.ok) {
-            statusOk = true;
-        }
-        // Salvar arquivos de todos os tipos, se houver
-        let arquivoOk = true;
+        const statusOk = resp.ok;
+
+        // Uploads (somente se preenchidos)
         const tiposUpload = [
             { campo: 'modalContratoUpload', rota: '/api/acoes/upload-contrato' },
             { campo: 'modalProcuracaoUpload', rota: '/api/acoes/upload-procuracao' },
@@ -376,8 +417,9 @@ function mostrarModalDocumentosAcompanhamento(acaoId, arquivosPorTipo, statusAtu
             { campo: 'modalFichaUpload', rota: '/api/acoes/upload-ficha' },
             { campo: 'modalDocumentacaoUpload', rota: '/api/acoes/upload-documentacao' },
             { campo: 'modalProvasUpload', rota: '/api/acoes/upload-provas' },
-            { campo: 'modalAcaoUpload', rota: '/api/acoes/upload-acao' }
+            { campo: 'modalAcaoUpload', rota: '/api/acoes/upload-acao' },
         ];
+        let arquivoOk = true;
         for (const tipo of tiposUpload) {
             const input = document.getElementById(tipo.campo);
             if (input && input.files && input.files.length) {
@@ -386,34 +428,35 @@ function mostrarModalDocumentosAcompanhamento(acaoId, arquivosPorTipo, statusAtu
                 formData.append('arquivo', input.files[0]);
                 const respArq = await fetch(tipo.rota, {
                     method: 'POST',
-                    body: formData
+                    headers: { ...getTenantHeaders() },
+                    credentials: 'same-origin',
+                    body: formData,
                 });
                 arquivoOk = arquivoOk && respArq.ok;
             }
         }
-        if (statusOk && arquivoOk && (!modoCorrigir || novoStatus === 'Finalizado' || comentarioEnviado)) {
+
+        if (statusOk && arquivoOk) {
             msg.textContent = 'Salvo!';
-            // Fechar o modal imediatamente após salvar
             document.getElementById('modalDocumentos').style.display = 'none';
             setTimeout(() => { msg.textContent = ''; }, 1200);
-            if (modoCorrigir) {
-                carregarKanbanCorrigir();
-            } else {
-                carregarKanban();
-            }
+            if (modoCorrigir) carregarKanbanCorrigir(); else carregarKanban();
         } else {
             msg.textContent = 'Erro ao salvar';
         }
     };
-    // Botão Aprovar (corrigir)
+
     if (modoCorrigir) {
         document.getElementById('modalAprovar').onclick = async () => {
             const msg = document.getElementById('modalStatusMsg');
             msg.textContent = 'Aprovando...';
-            const resp = await fetch(`/api/acoes/aprovar/${acaoId}`, { method: 'POST' });
+            const resp = await fetch(`/api/acoes/aprovar/${acaoId}`, {
+                method: 'POST',
+                headers: { ...getTenantHeaders() },
+                credentials: 'same-origin',
+            });
             if (resp.ok) {
                 msg.textContent = 'Aprovado!';
-                // Fechar o modal imediatamente após aprovar
                 document.getElementById('modalDocumentos').style.display = 'none';
                 setTimeout(() => { msg.textContent = ''; }, 1200);
                 carregarKanbanCorrigir();
@@ -422,26 +465,30 @@ function mostrarModalDocumentosAcompanhamento(acaoId, arquivosPorTipo, statusAtu
             }
         };
     }
-    // Mapear nomes para títulos
-    // Descobrir designado atual (para setar no select)
-    window.__modalDesignadoAtual = arquivosPorTipo && arquivosPorTipo.__designadoAtual ? arquivosPorTipo.__designadoAtual : 'Nenhum';
+
+    // Designado atual (para preencher select ao abrir)
+    window.__modalDesignadoAtual = arquivosPorTipo?.__designadoAtual || 'Nenhum';
+
+    // Monta blocos por tipo
     const tipos = {
-        'Contrato': arquivosPorTipo.Contrato || [],
-        'Procuracao': arquivosPorTipo.Procuracao || [],
-        'Declaracao': arquivosPorTipo.Declaracao || [],
-        'Ficha': arquivosPorTipo.Ficha || [],
-        'Documentação': arquivosPorTipo.Documentacao || [],
-        'Provas': arquivosPorTipo.Provas || [],
-        'Ação': arquivosPorTipo.Acao || []
+        'Contrato': arquivosPorTipo?.Contrato || [],
+        'Procuracao': arquivosPorTipo?.Procuracao || [],
+        'Declaracao': arquivosPorTipo?.Declaracao || [],
+        'Ficha': arquivosPorTipo?.Ficha || [],
+        'Documentação': arquivosPorTipo?.Documentacao || [],
+        'Provas': arquivosPorTipo?.Provas || [],
+        'Ação': arquivosPorTipo?.Acao || [],
     };
-    // Container dos blocos
+
     const blocos = document.createElement('div');
     blocos.className = 'modal-docs-tipos';
+
     Object.entries(tipos).forEach(([titulo, listaArqs]) => {
         const bloco = document.createElement('div');
         bloco.className = 'modal-docs-bloco';
         bloco.innerHTML = `<div class='modal-docs-bloco-titulo'>${titulo}</div>`;
-        // Upload para qualquer tipo se não houver arquivo
+
+        // Upload inline quando não há arquivo
         if (listaArqs.length === 0) {
             const tipoCampo =
                 titulo === 'Contrato' ? 'modalContratoUpload' :
@@ -451,83 +498,77 @@ function mostrarModalDocumentosAcompanhamento(acaoId, arquivosPorTipo, statusAtu
                                 titulo === 'Documentação' ? 'modalDocumentacaoUpload' :
                                     titulo === 'Provas' ? 'modalProvasUpload' :
                                         titulo === 'Ação' ? 'modalAcaoUpload' : '';
+
             const uploadDrop = document.createElement('div');
             uploadDrop.className = 'modal-docs-upload-drop';
             uploadDrop.innerHTML = `
-            <span class=\"icon\">📎</span>
-            <span id=\"${tipoCampo}Label\">Arraste o arquivo aqui ou clique para selecionar</span>
-            <span class=\"file-name\" id=\"${tipoCampo}Nome\"></span>
-            <input type='file' id='${tipoCampo}' accept='.pdf,.doc,.docx,.png,.jpg,.jpeg' style='display:none;'>
-          `;
+        <span class="icon">📎</span>
+        <span id="${tipoCampo}Label">Arraste o arquivo aqui ou clique para selecionar</span>
+        <span class="file-name" id="${tipoCampo}Nome"></span>
+        <input type='file' id='${tipoCampo}' accept='.pdf,.doc,.docx,.png,.jpg,.jpeg' style='display:none;'>
+      `;
             bloco.appendChild(uploadDrop);
-            // Lógica de upload visual
+
             const input = uploadDrop.querySelector(`#${tipoCampo}`);
             const nomeSpan = uploadDrop.querySelector(`#${tipoCampo}Nome`);
             uploadDrop.onclick = () => input.click();
             input.addEventListener('change', () => {
-                if (input.files.length) {
-                    nomeSpan.textContent = input.files[0].name;
-                } else {
-                    nomeSpan.textContent = '';
-                }
+                nomeSpan.textContent = input.files.length ? input.files[0].name : '';
             });
-            // Drag and drop
-            uploadDrop.addEventListener('dragover', function (e) {
-                e.preventDefault();
-                uploadDrop.classList.add('dragover');
-            });
-            uploadDrop.addEventListener('dragleave', function (e) {
-                uploadDrop.classList.remove('dragover');
-            });
-            uploadDrop.addEventListener('drop', function (e) {
+            uploadDrop.addEventListener('dragover', e => { e.preventDefault(); uploadDrop.classList.add('dragover'); });
+            uploadDrop.addEventListener('dragleave', () => uploadDrop.classList.remove('dragover'));
+            uploadDrop.addEventListener('drop', e => {
                 e.preventDefault();
                 uploadDrop.classList.remove('dragover');
-                if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                if (e.dataTransfer.files?.length) {
                     input.files = e.dataTransfer.files;
                     nomeSpan.textContent = input.files[0].name;
                 }
             });
         }
+
+        // Lista de arquivos já existentes
         const arqsDiv = document.createElement('div');
         arqsDiv.className = 'modal-docs-arquivos';
-        if (listaArqs.length === 0) {
+        if (!listaArqs.length) {
             arqsDiv.innerHTML = `<div style='color:#888'>Nenhum arquivo.</div>`;
         } else {
             listaArqs.forEach(arq => {
                 const card = document.createElement('div');
                 card.className = 'modal-docs-arquivo-card';
-                const nomeBase = (arq.nome || '').replace(/^(CON|DEC|PRO|FIC|DOC|PROV|ACAO)\s*-\s*/, '');
+                const nomeBase = String(arq.nome || '').replace(/^(CON|DEC|PRO|FIC|DOC|PROV|ACAO)\s*-\s*/, '');
                 const nomeCurto = nomeBase.length > 18 ? nomeBase.slice(0, 18) + '…' : nomeBase;
+
                 card.innerHTML = `
-                <span class="modal-docs-arquivo-icon">📄</span>
-                <span class="modal-docs-arquivo-nome" title="${arq.nome}">${nomeCurto}</span>
-                <a class="modal-docs-arquivo-link" href="${(arq.path || '').replace(/^.*public/, '')}" target="_blank" title="Baixar ${arq.nome}">⬇️</a>
-                <button class="modal-docs-arquivo-remove" title="Excluir" style="margin-left:0.7rem;color:#e53e3e;background:none;border:none;font-size:1.2em;cursor:pointer;font-weight:bold;">×</button>
-                `;
-                // Evento de remover
+          <span class="modal-docs-arquivo-icon">📄</span>
+          <span class="modal-docs-arquivo-nome" title="${arq.nome}">${nomeCurto}</span>
+          <a class="modal-docs-arquivo-link" href="${(arq.path || '').replace(/^.*public/, '')}" target="_blank" title="Baixar ${arq.nome}">⬇️</a>
+          <button class="modal-docs-arquivo-remove" title="Excluir" style="margin-left:0.7rem;color:#e53e3e;background:none;border:none;font-size:1.2em;cursor:pointer;font-weight:bold;">×</button>
+        `;
+
                 card.querySelector('.modal-docs-arquivo-remove').onclick = async (ev) => {
                     ev.stopPropagation();
                     if (!confirm('Tem certeza que deseja excluir este arquivo?')) return;
                     const resp = await fetch('/api/acoes/remover-arquivo', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ acaoId: acaoId, nomeArquivo: arq.nome })
+                        headers: { 'Content-Type': 'application/json', ...getTenantHeaders() },
+                        credentials: 'same-origin',
+                        body: JSON.stringify({ acaoId, nomeArquivo: arq.nome }),
                     });
                     if (resp.ok) {
-                        // reabre no mesmo modo em que o modal foi aberto
-                        if (modoCorrigir) {
-                            abrirDetalhesAcaoCorrigir(acaoId);
-                        } else {
-                            abrirDetalhesAcao(acaoId);
-                        }
+                        if (modoCorrigir) abrirDetalhesAcaoCorrigir(acaoId);
+                        else abrirDetalhesAcao(acaoId);
                     }
                 };
+
                 arqsDiv.appendChild(card);
             });
         }
+
         bloco.appendChild(arqsDiv);
         blocos.appendChild(bloco);
     });
+
     lista.appendChild(blocos);
     modal.style.display = 'flex';
 }
@@ -536,171 +577,115 @@ function fecharModalDocumentos() {
     document.getElementById('modalDocumentos').style.display = 'none';
 }
 
-// Função para buscar clientes e estagiários (exemplo, ajustar para seu backend)
+/* ===================== Formulário de criação ===================== */
 async function carregarOpcoes() {
-    // Buscar clientes
-    const clientes = await fetch('/api/clientes').then(r => r.json()).catch(() => []);
+    // Clientes
+    const clientes = await fetch('/api/clientes', { headers: { ...getTenantHeaders() }, credentials: 'same-origin' })
+        .then(r => r.json()).catch(() => []);
     const selectCliente = document.getElementById('cliente');
     clientes.forEach(c => {
         const opt = document.createElement('option');
         opt.value = c.id;
-        opt.textContent = c.nome + ' - ' + c.cpf_cnpj;
+        opt.textContent = `${c.nome} - ${c.cpf_cnpj}`;
         selectCliente.appendChild(opt);
     });
-    // Buscar estagiários
-    const designados = await fetch('/api/usuarios/designados').then(r => r.json()).catch(() => []);
+
+    // Designados
+    const designados = await fetch('/api/usuarios/designados', { headers: { ...getTenantHeaders() }, credentials: 'same-origin' })
+        .then(r => r.json()).catch(() => []);
     const selectdesignado = document.getElementById('designado');
     designados.forEach(e => {
         const opt = document.createElement('option');
-        opt.value = e.id;
+        opt.value = e.id; // criação usa id; backend resolve nome/id
         opt.textContent = e.nome;
         selectdesignado.appendChild(opt);
     });
 }
 carregarOpcoes();
 
-// Envio do formulário
 document.getElementById('formAcao').addEventListener('submit', async function (e) {
     e.preventDefault();
-
-    // Criar FormData para enviar dados e arquivos
     const formData = new FormData();
 
-    // Dados básicos
     formData.append('cliente_id', document.getElementById('cliente').value);
     formData.append('designado_id', document.getElementById('designado').value);
     formData.append('status', 'Não iniciado');
-    formData.append('complexidade', document.getElementById('complexidade').value)
+    formData.append('complexidade', document.getElementById('complexidade').value);
     formData.append('titulo', document.getElementById('titulo').value);
 
-    // Arquivos
-    const contratoFiles = document.getElementById('contratoArquivo').files;
-    const procuracaoFiles = document.getElementById('procuracaoArquivo').files;
-    const declaracaoFiles = document.getElementById('declaracaoArquivo').files;
-    const fichaFiles = document.getElementById('fichaArquivo').files;
-    const documentacaoFiles = document.getElementById('documentacaoArquivo').files;
-    const provasFiles = document.getElementById('provasArquivo').files;
-
-    // Adicionar arquivos com campos separados para cada tipo
-    for (let i = 0; i < contratoFiles.length; i++) {
-        formData.append('contratoArquivo', contratoFiles[i]);
-    }
-    for (let i = 0; i < procuracaoFiles.length; i++) {
-        formData.append('procuracaoArquivo', procuracaoFiles[i]);
-    }
-    for (let i = 0; i < declaracaoFiles.length; i++) {
-        formData.append('declaracaoArquivo', declaracaoFiles[i]);
-    }
-    for (let i = 0; i < fichaFiles.length; i++) {
-        formData.append('fichaArquivo', fichaFiles[i]);
-    }
-    for (let i = 0; i < documentacaoFiles.length; i++) {
-        formData.append('documentacaoArquivo', documentacaoFiles[i]);
-    }
-    for (let i = 0; i < provasFiles.length; i++) {
-        formData.append('provasArquivo', provasFiles[i]);
-    }
+    // arquivos
+    ['contratoArquivo', 'procuracaoArquivo', 'declaracaoArquivo', 'fichaArquivo', 'documentacaoArquivo', 'provasArquivo']
+        .forEach(campo => {
+            const files = document.getElementById(campo).files;
+            for (let i = 0; i < files.length; i++) formData.append(campo, files[i]);
+        });
 
     const resp = await fetch('/api/acoes', {
         method: 'POST',
-        body: formData
+        headers: { ...getTenantHeaders() },
+        credentials: 'same-origin',
+        body: formData,
     });
-
     const data = await resp.json();
 
     if (resp.ok) {
         this.reset();
-        // Limpar listas de arquivos
-        document.getElementById('contratoArquivoLista').innerHTML = '';
-        document.getElementById('procuracaoArquivoLista').innerHTML = '';
-        document.getElementById('declaracaoArquivoLista').innerHTML = '';
-        document.getElementById('fichaArquivoLista').innerHTML = '';
-        document.getElementById('documentacaoArquivoLista').innerHTML = '';
-        document.getElementById('provasArquivoLista').innerHTML = '';
-        // Exibir pop-up de sucesso
+        ['contratoArquivoLista', 'procuracaoArquivoLista', 'declaracaoArquivoLista', 'fichaArquivoLista', 'documentacaoArquivoLista', 'provasArquivoLista']
+            .forEach(id => (document.getElementById(id).innerHTML = ''));
         mostrarPopupAcaoCriada(data.mensagem || 'Ação criada com sucesso!');
     } else {
-        document.getElementById('mensagem').textContent = data.mensagem || 'Erro ao criar ação';
-        document.getElementById('mensagem').style.color = '#dc3545';
+        const mensagem = document.getElementById('mensagem');
+        mensagem.textContent = data.mensagem || 'Erro ao criar ação';
+        mensagem.style.color = '#dc3545';
     }
 });
 
-// Feedback visual ao enviar
+// limpa mensagem ao submeter
 const form = document.getElementById('formAcao');
 const mensagem = document.getElementById('mensagem');
-form.addEventListener('submit', function () {
-    mensagem.textContent = '';
-});
+form.addEventListener('submit', function () { mensagem.textContent = ''; });
 
-
-// Gerenciamento de múltiplos arquivos e remoção
+/* ===================== Uploads: listas e DnD ===================== */
 function atualizarListaArquivos(inputId, listaId) {
     const input = document.getElementById(inputId);
     const lista = document.getElementById(listaId);
     lista.innerHTML = '';
-    if (input.files && input.files.length > 0) {
+    if (input.files?.length) {
         Array.from(input.files).forEach((file, idx) => {
             const item = document.createElement('div');
             item.className = 'file-list-item';
             item.innerHTML = `<span>${file.name}</span><button type="button" class="remove-file" title="Remover" data-idx="${idx}">×</button>`;
             lista.appendChild(item);
         });
-        // Adiciona evento de remoção
         lista.querySelectorAll('.remove-file').forEach(btn => {
-            btn.onclick = function (e) {
+            btn.onclick = (e) => {
                 e.stopPropagation();
-                removerArquivo(inputId, parseInt(btn.getAttribute('data-idx')));
+                removerArquivo(inputId, parseInt(btn.getAttribute('data-idx'), 10));
             };
         });
     }
 }
-
 function removerArquivo(inputId, idx) {
     const input = document.getElementById(inputId);
     const dt = new DataTransfer();
-    Array.from(input.files).forEach((file, i) => {
-        if (i !== idx) dt.items.add(file);
-    });
+    Array.from(input.files).forEach((file, i) => { if (i !== idx) dt.items.add(file); });
     input.files = dt.files;
-    // Atualiza lista
     atualizarListaArquivos(inputId, inputId + 'Lista');
 }
 
-document.getElementById('contratoArquivo').addEventListener('change', function () {
-    atualizarListaArquivos('contratoArquivo', 'contratoArquivoLista');
-});
-document.getElementById('procuracaoArquivo').addEventListener('change', function () {
-    atualizarListaArquivos('procuracaoArquivo', 'procuracaoArquivoLista');
-});
-document.getElementById('declaracaoArquivo').addEventListener('change', function () {
-    atualizarListaArquivos('declaracaoArquivo', 'declaracaoArquivoLista');
-});
-document.getElementById('fichaArquivo').addEventListener('change', function () {
-    atualizarListaArquivos('fichaArquivo', 'fichaArquivoLista');
-});
-document.getElementById('documentacaoArquivo').addEventListener('change', function () {
-    atualizarListaArquivos('documentacaoArquivo', 'documentacaoArquivoLista');
-});
-document.getElementById('provasArquivo').addEventListener('change', function () {
-    atualizarListaArquivos('provasArquivo', 'provasArquivoLista');
+['contratoArquivo', 'procuracaoArquivo', 'declaracaoArquivo', 'fichaArquivo', 'documentacaoArquivo', 'provasArquivo'].forEach(id => {
+    document.getElementById(id).addEventListener('change', () => atualizarListaArquivos(id, id + 'Lista'));
 });
 
-// Drag and drop para cada campo
 function setupDrop(dropId, inputId) {
     const drop = document.getElementById(dropId);
     const input = document.getElementById(inputId);
-    drop.addEventListener('dragover', function (e) {
-        e.preventDefault();
-        drop.classList.add('dragover');
-    });
-    drop.addEventListener('dragleave', function (e) {
-        drop.classList.remove('dragover');
-    });
-    drop.addEventListener('drop', function (e) {
+    drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('dragover'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
+    drop.addEventListener('drop', (e) => {
         e.preventDefault();
         drop.classList.remove('dragover');
-        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-            // Adiciona arquivos ao input mantendo os já existentes
+        if (e.dataTransfer.files?.length) {
             const dt = new DataTransfer();
             Array.from(input.files).forEach(f => dt.items.add(f));
             Array.from(e.dataTransfer.files).forEach(f => dt.items.add(f));
@@ -716,8 +701,7 @@ setupDrop('drop-ficha', 'fichaArquivo');
 setupDrop('drop-documentacao', 'documentacaoArquivo');
 setupDrop('drop-provas', 'provasArquivo');
 
-
-// Função para mostrar notificação toast no canto inferior esquerdo
+/* ===================== Toast ===================== */
 function mostrarPopupAcaoCriada(msg) {
     let container = document.getElementById('toastContainer');
     if (!container) {

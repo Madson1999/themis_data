@@ -1,48 +1,65 @@
-// Funções de navegação
+/**
+ * public/js/clientes.js
+ * ----------------------------------------
+ * Frontend de Clientes (SaaS multi-tenant).
+ * - Envia sempre o cabeçalho `x-tenant-id` (obtido do cookie `tenant_id`)
+ * - CRUD + busca com debounce
+ * - Máscaras de CPF/CNPJ e telefone
+ * - Modais de visualizar/editar
+ */
+
+/* ===================== Utils (tenant/cookies) ===================== */
+function getCookie(name) {
+    const m = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()[\]\\/+^])/g, '\\$1') + '=([^;]*)'));
+    return m ? decodeURIComponent(m[1]) : null;
+}
+function getTenantHeaders() {
+    const t = getCookie('tenant_id');
+    const headers = { 'x-tenant-id': t || '' };
+    return headers;
+}
+
+/* ===================== Navegação entre abas ===================== */
 function showTab(tabName) {
-    // Esconder todas as abas
-    document.querySelectorAll('.tab-content').forEach(tab => {
-        tab.classList.remove('active');
-    });
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.classList.remove('active');
-    });
+    document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
 
-    // Mostrar aba selecionada
-    document.getElementById(tabName).classList.add('active');
-    event.target.classList.add('active');
+    const el = document.getElementById(tabName);
+    if (el) el.classList.add('active');
 
-    // Carregar dados se for a aba de lista
+    if (typeof event !== 'undefined' && event?.target) {
+        event.target.classList.add('active');
+    }
+
     if (tabName === 'lista') {
         carregarClientes();
     }
 }
 
-// Funções do formulário
+/* ===================== Helpers de UI ===================== */
 function limparFormulario() {
-    document.getElementById('clienteForm').reset();
+    const form = document.getElementById('clienteForm');
+    if (form) form.reset();
     hideMessage();
 }
 
 function showMessage(text, type) {
     const messageDiv = document.getElementById('message');
+    if (!messageDiv) return;
     messageDiv.textContent = text;
     messageDiv.className = `message ${type}`;
     messageDiv.style.display = 'block';
-
-    setTimeout(() => {
-        hideMessage();
-    }, 5000);
+    setTimeout(hideMessage, 5000);
 }
 
 function hideMessage() {
-    document.getElementById('message').style.display = 'none';
+    const messageDiv = document.getElementById('message');
+    if (messageDiv) messageDiv.style.display = 'none';
 }
 
-// Cadastro de cliente
-document.getElementById('clienteForm').addEventListener('submit', async function (e) {
+/* ===================== Cadastro de cliente ===================== */
+document.getElementById('clienteForm')?.addEventListener('submit', async function (e) {
     e.preventDefault();
-
     const formData = new FormData(this);
     const clienteData = Object.fromEntries(formData.entries());
 
@@ -50,61 +67,70 @@ document.getElementById('clienteForm').addEventListener('submit', async function
         const response = await fetch('/api/clientes', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                ...getTenantHeaders(),
             },
-            body: JSON.stringify(clienteData)
+            credentials: 'same-origin',
+            body: JSON.stringify(clienteData),
         });
 
         const result = await response.json();
-
         if (result.sucesso) {
             showMessage('Cliente cadastrado com sucesso!', 'success');
             limparFormulario();
+            carregarClientes();
+            showTab('lista');
         } else {
             showMessage(result.mensagem || 'Erro ao cadastrar cliente', 'error');
         }
-    } catch (error) {
+    } catch (_e) {
         showMessage('Erro ao conectar com o servidor', 'error');
     }
 });
 
 let clientesCache = [];
 
-// Carregar lista de clientes
+/* ===================== Carregar lista ===================== */
 async function carregarClientes() {
     try {
-        const response = await fetch('/api/clientes');
+        const response = await fetch('/api/clientes', {
+            headers: { ...getTenantHeaders() },
+            credentials: 'same-origin',
+        });
         const clientes = await response.json();
+
         const tbody = document.getElementById('clientesTableBody');
+        if (!tbody) return;
         tbody.innerHTML = '';
-        clientes.forEach(cliente => {
+
+        clientes.forEach((cliente) => {
             const row = document.createElement('tr');
             row.innerHTML = `
-            <td>${cliente.nome}</td>
-            <td>${cliente.cpf_cnpj}</td>
-            <td>${cliente.telefone1 || '-'}</td>
-            <td>
-            <div class="action-buttons">
-            <button class="btn btn-secondary btn-sm" onclick="visualizarCliente(${cliente.id})">
-            <i class="fa fa-eye"></i>
+        <td>${cliente.nome}</td>
+        <td>${cliente.cpf_cnpj}</td>
+        <td>${cliente.telefone1 || '-'}</td>
+        <td>
+          <div class="action-buttons">
+            <button class="btn btn-secondary btn-sm" onclick="visualizarCliente(${cliente.id})" title="Visualizar">
+              <i class="fa fa-eye"></i>
             </button>
-            <button class="btn btn-warning btn-sm" onclick="editarCliente(${cliente.id})">
-            <i class="fa fa-pencil-alt"></i>
+            <button class="btn btn-warning btn-sm" onclick="editarCliente(${cliente.id})" title="Editar">
+              <i class="fa fa-pencil-alt"></i>
             </button>
-            </div>
-            </td>
-        `;
-
+          </div>
+        </td>
+      `;
             tbody.appendChild(row);
         });
+
         clientesCache = clientes;
     } catch (error) {
         console.error('Erro ao carregar clientes:', error);
+        showMessage('Erro ao carregar clientes', 'error');
     }
 }
 
 let debounceTimer;
-
 document.addEventListener('DOMContentLoaded', () => {
     const input = document.getElementById('searchInput');
     if (input) {
@@ -117,63 +143,64 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// Busca no servidor
-async function buscarClientes(searchTerm = "") {
+/* ===================== Busca ===================== */
+async function buscarClientes(searchTerm = '') {
     try {
-        const resp = await fetch(`/api/clientes?searchTerm=${encodeURIComponent(searchTerm)}`);
+        const resp = await fetch(`/api/clientes?searchTerm=${encodeURIComponent(searchTerm)}`, {
+            headers: { ...getTenantHeaders() },
+            credentials: 'same-origin',
+        });
         const clientes = await resp.json();
 
         const tbody = document.getElementById('clientesTableBody');
+        if (!tbody) return;
         tbody.innerHTML = '';
 
-        clientes.forEach(cliente => {
+        clientes.forEach((cliente) => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
-            <td>${cliente.nome}</td>
-            <td>${cliente.cpf_cnpj}</td>
-            <td>${cliente.telefone1 || '-'}</td>
-            <td>
-                <div class="action-buttons">
-                <button class="btn btn-secondary btn-sm" onclick="visualizarCliente(${cliente.id})">Visualizar</button>
-                <button class="btn btn-warning btn-sm" onclick="editarCliente(${cliente.id})">Editar</button>
-                </div>
-            </td>
-            `;
-
+        <td>${cliente.nome}</td>
+        <td>${cliente.cpf_cnpj}</td>
+        <td>${cliente.telefone1 || '-'}</td>
+        <td>
+          <div class="action-buttons">
+            <button class="btn btn-secondary btn-sm" onclick="visualizarCliente(${cliente.id})">Visualizar</button>
+            <button class="btn btn-warning btn-sm" onclick="editarCliente(${cliente.id})">Editar</button>
+          </div>
+        </td>
+      `;
             tbody.appendChild(tr);
         });
 
-        clientesCache = clientes; // atualiza cache para edição
+        clientesCache = clientes;
     } catch (e) {
         console.error('Erro ao buscar clientes:', e);
         showMessage('Erro ao buscar clientes', 'error');
     }
 }
 
-
+/* ===================== Modais: editar/visualizar ===================== */
 function editarCliente(id) {
-    const cliente = clientesCache.find(c => c.id === id);
-    if (!cliente) return;
-    document.getElementById('edit_id').value = cliente.id || '';
-    document.getElementById('edit_nome').value = cliente.nome || '';
-    if (cliente.data_nasc) {
-        document.getElementById('edit_data_nasc').value = cliente.data_nasc.substring(0, 10);
-    } else {
-        document.getElementById('edit_data_nasc').value = '';
-    }
-    document.getElementById('edit_cpf_cnpj').value = cliente.cpf_cnpj || '';
-    document.getElementById('edit_rg').value = cliente.rg || '';
-    document.getElementById('edit_telefone1').value = cliente.telefone1 || '';
-    document.getElementById('edit_telefone2').value = cliente.telefone2 || '';
-    document.getElementById('edit_email').value = cliente.email || '';
-    document.getElementById('edit_endereco').value = cliente.endereco || '';
-    document.getElementById('edit_bairro').value = cliente.bairro || '';
-    document.getElementById('edit_cep').value = cliente.cep || '';
-    document.getElementById('edit_uf').value = cliente.uf || '';
-    document.getElementById('edit_cidade').value = cliente.cidade || '';
-    document.getElementById('edit_profissao').value = cliente.profissao || '';
-    document.getElementById('edit_nacionalidade').value = cliente.nacionalidade || '';
-    document.getElementById('edit_estado_civil').value = cliente.estado_civil || '';
+    const c = clientesCache.find((x) => x.id === id);
+    if (!c) return;
+
+    document.getElementById('edit_id').value = c.id || '';
+    document.getElementById('edit_nome').value = c.nome || '';
+    document.getElementById('edit_data_nasc').value = c.data_nasc ? String(c.data_nasc).substring(0, 10) : '';
+    document.getElementById('edit_cpf_cnpj').value = c.cpf_cnpj || '';
+    document.getElementById('edit_rg').value = c.rg || '';
+    document.getElementById('edit_telefone1').value = c.telefone1 || '';
+    document.getElementById('edit_telefone2').value = c.telefone2 || '';
+    document.getElementById('edit_email').value = c.email || '';
+    document.getElementById('edit_endereco').value = c.endereco || '';
+    document.getElementById('edit_bairro').value = c.bairro || '';
+    document.getElementById('edit_cep').value = c.cep || '';
+    document.getElementById('edit_uf').value = c.uf || '';
+    document.getElementById('edit_cidade').value = c.cidade || '';
+    document.getElementById('edit_profissao').value = c.profissao || '';
+    document.getElementById('edit_nacionalidade').value = c.nacionalidade || '';
+    document.getElementById('edit_estado_civil').value = c.estado_civil || '';
+
     document.getElementById('modalEditarCliente').style.display = 'block';
 }
 
@@ -182,30 +209,25 @@ function fecharModalEditar() {
 }
 
 function visualizarCliente(id) {
-    const cliente = clientesCache.find(c => c.id === id);
-    if (!cliente) return;
+    const c = clientesCache.find((x) => x.id === id);
+    if (!c) return;
 
-    // Preenche os campos (todos só-leitura no HTML)
-    document.getElementById('view_id').value = cliente.id || '';
-    document.getElementById('view_nome').value = cliente.nome || '';
-    if (cliente.data_nasc) {
-        document.getElementById('view_data_nasc').value = (cliente.data_nasc || '').substring(0, 10);
-    } else {
-        document.getElementById('view_data_nasc').value = '';
-    }
-    document.getElementById('view_cpf_cnpj').value = cliente.cpf_cnpj || '';
-    document.getElementById('view_rg').value = cliente.rg || '';
-    document.getElementById('view_telefone1').value = cliente.telefone1 || '';
-    document.getElementById('view_telefone2').value = cliente.telefone2 || '';
-    document.getElementById('view_email').value = cliente.email || '';
-    document.getElementById('view_endereco').value = cliente.endereco || '';
-    document.getElementById('view_bairro').value = cliente.bairro || '';
-    document.getElementById('view_cep').value = cliente.cep || '';
-    document.getElementById('view_uf').value = cliente.uf || '';
-    document.getElementById('view_cidade').value = cliente.cidade || '';
-    document.getElementById('view_profissao').value = cliente.profissao || '';
-    document.getElementById('view_nacionalidade').value = cliente.nacionalidade || '';
-    document.getElementById('view_estado_civil').value = cliente.estado_civil || '';
+    document.getElementById('view_id').value = c.id || '';
+    document.getElementById('view_nome').value = c.nome || '';
+    document.getElementById('view_data_nasc').value = c.data_nasc ? String(c.data_nasc).substring(0, 10) : '';
+    document.getElementById('view_cpf_cnpj').value = c.cpf_cnpj || '';
+    document.getElementById('view_rg').value = c.rg || '';
+    document.getElementById('view_telefone1').value = c.telefone1 || '';
+    document.getElementById('view_telefone2').value = c.telefone2 || '';
+    document.getElementById('view_email').value = c.email || '';
+    document.getElementById('view_endereco').value = c.endereco || '';
+    document.getElementById('view_bairro').value = c.bairro || '';
+    document.getElementById('view_cep').value = c.cep || '';
+    document.getElementById('view_uf').value = c.uf || '';
+    document.getElementById('view_cidade').value = c.cidade || '';
+    document.getElementById('view_profissao').value = c.profissao || '';
+    document.getElementById('view_nacionalidade').value = c.nacionalidade || '';
+    document.getElementById('view_estado_civil').value = c.estado_civil || '';
 
     document.getElementById('modalVisualizarCliente').style.display = 'block';
 }
@@ -214,40 +236,47 @@ function fecharModalVisualizar() {
     document.getElementById('modalVisualizarCliente').style.display = 'none';
 }
 
-
+/* ===================== Excluir ===================== */
 function excluirCliente(id) {
-    if (confirm('Tem certeza que deseja excluir este cliente?')) {
-        fetch(`/api/clientes/${id}`, {
-            method: 'DELETE'
+    if (!confirm('Tem certeza que deseja excluir este cliente?')) return;
+
+    fetch(`/api/clientes/${id}`, {
+        method: 'DELETE',
+        headers: { ...getTenantHeaders() },
+        credentials: 'same-origin',
+    })
+        .then((r) => r.json())
+        .then((result) => {
+            if (result.sucesso) {
+                showMessage('Cliente excluído com sucesso!', 'success');
+                fecharModalEditar();
+                carregarClientes();
+            } else {
+                showMessage(result.mensagem || 'Erro ao excluir cliente', 'error');
+            }
         })
-            .then(response => response.json())
-            .then(result => {
-                if (result.sucesso) {
-                    showMessage('Cliente excluído com sucesso!', 'success');
-                    fecharModalEditar();
-                    carregarClientes();
-                } else {
-                    showMessage(result.mensagem || 'Erro ao excluir cliente', 'error');
-                }
-            })
-            .catch(() => {
-                showMessage('Erro ao conectar com o servidor', 'error');
-            });
-    }
+        .catch(() => showMessage('Erro ao conectar com o servidor', 'error'));
 }
 
-// Inicialização
+/* ===================== Inicialização / Eventos ===================== */
 document.addEventListener('DOMContentLoaded', function () {
     console.log('Página de clientes carregada!');
-    document.getElementById('formEditarCliente').addEventListener('submit', async function (e) {
+
+    // Submit do modal de edição
+    document.getElementById('formEditarCliente')?.addEventListener('submit', async function (e) {
         e.preventDefault();
         const formData = new FormData(this);
         const clienteData = Object.fromEntries(formData.entries());
+
         try {
             const response = await fetch(`/api/clientes/${clienteData.id}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(clienteData)
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...getTenantHeaders(),
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify(clienteData),
             });
             const result = await response.json();
             if (result.sucesso) {
@@ -257,67 +286,31 @@ document.addEventListener('DOMContentLoaded', function () {
             } else {
                 showMessage(result.mensagem || 'Erro ao atualizar cliente', 'error');
             }
-        } catch (error) {
+        } catch (_e) {
             showMessage('Erro ao conectar com o servidor', 'error');
         }
     });
 
-    // Aplica máscara ao digitar nos campos de CPF/CNPJ
+    // Máscara CPF/CNPJ (cadastro)
     const cpfCnpjInput = document.getElementById('cpf_cnpj');
-    if (cpfCnpjInput) {
-        cpfCnpjInput.addEventListener('input', function (e) {
-            const cursor = cpfCnpjInput.selectionStart;
-            const oldValue = cpfCnpjInput.value;
-            cpfCnpjInput.value = maskCpfCnpj(cpfCnpjInput.value);
-            // Ajusta o cursor para o final
-            cpfCnpjInput.setSelectionRange(cpfCnpjInput.value.length, cpfCnpjInput.value.length);
-        });
-    }
+    cpfCnpjInput?.addEventListener('input', function () {
+        const pos = cpfCnpjInput.selectionStart;
+        cpfCnpjInput.value = maskCpfCnpj(cpfCnpjInput.value);
+        cpfCnpjInput.setSelectionRange(cpfCnpjInput.value.length, cpfCnpjInput.value.length);
+    });
 
-    // Para o modal de edição
+    // Máscara CPF/CNPJ (edição)
     const editCpfCnpjInput = document.getElementById('edit_cpf_cnpj');
-    if (editCpfCnpjInput) {
-        editCpfCnpjInput.addEventListener('input', function (e) {
-            editCpfCnpjInput.value = maskCpfCnpj(editCpfCnpjInput.value);
-            editCpfCnpjInput.setSelectionRange(editCpfCnpjInput.value.length, editCpfCnpjInput.value.length);
-        });
-    }
+    editCpfCnpjInput?.addEventListener('input', function () {
+        editCpfCnpjInput.value = maskCpfCnpj(editCpfCnpjInput.value);
+        editCpfCnpjInput.setSelectionRange(editCpfCnpjInput.value.length, editCpfCnpjInput.value.length);
+    });
 
-    // Máscara automática para CPF/CNPJ
-    function maskCpfCnpj(value) {
-        value = value.replace(/\D/g, '');
-        if (value.length <= 11) {
-            // CPF: 000.000.000-00
-            value = value.replace(/(\d{3})(\d)/, '$1.$2');
-            value = value.replace(/(\d{3})(\d)/, '$1.$2');
-            value = value.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
-        } else {
-            // CNPJ: 00.000.000/0000-00
-            value = value.replace(/(\d{2})(\d)/, '$1.$2');
-            value = value.replace(/(\d{3})(\d)/, '$1.$2');
-            value = value.replace(/(\d{3})(\d)/, '$1/$2');
-            value = value.replace(/(\d{4})(\d{1,2})$/, '$1-$2');
-        }
-        return value;
-    }
-
-    // Função para capitalizar cada palavra
-    function capitalizeWords(str) {
-        return str.replace(/\b\w+/g, function (word) {
-            return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
-        });
-    }
-
-    // Função para forçar minúsculas
-    function toLower(str) {
-        return str.toLowerCase();
-    }
-
-    // Intercepta o submit do formulário para ajustar os campos
+    // Ajustes de capitalização/minúsculas antes do submit (cadastro)
     const clienteForm = document.getElementById('clienteForm');
-    if (clienteForm) {
-        clienteForm.addEventListener('submit', function (e) {
-            // Antes de enviar, ajusta os valores dos campos
+    clienteForm?.addEventListener(
+        'submit',
+        function () {
             const nomeInput = document.getElementById('nome');
             const cidadeInput = document.getElementById('cidade');
             const profissaoInput = document.getElementById('profissao');
@@ -329,13 +322,15 @@ document.addEventListener('DOMContentLoaded', function () {
             if (profissaoInput) profissaoInput.value = toLower(profissaoInput.value);
             if (nacionalidadeInput) nacionalidadeInput.value = toLower(nacionalidadeInput.value);
             if (estadoCivilInput) estadoCivilInput.value = toLower(estadoCivilInput.value);
-        }, true);
-    }
+        },
+        true
+    );
 
-    // Para o modal de edição
+    // Ajustes no modal de edição
     const formEditarCliente = document.getElementById('formEditarCliente');
-    if (formEditarCliente) {
-        formEditarCliente.addEventListener('submit', function (e) {
+    formEditarCliente?.addEventListener(
+        'submit',
+        function () {
             const nomeInput = document.getElementById('edit_nome');
             const cidadeInput = document.getElementById('edit_cidade');
             const profissaoInput = document.getElementById('edit_profissao');
@@ -347,36 +342,52 @@ document.addEventListener('DOMContentLoaded', function () {
             if (profissaoInput) profissaoInput.value = toLower(profissaoInput.value);
             if (nacionalidadeInput) nacionalidadeInput.value = toLower(nacionalidadeInput.value);
             if (estadoCivilInput) estadoCivilInput.value = toLower(estadoCivilInput.value);
-        }, true);
-    }
+        },
+        true
+    );
 
-    // Aplica máscara ao digitar nos campos de telefone
+    // Máscaras telefone
     const telefoneInput = document.getElementById('telefone1') || document.getElementById('telefone2');
-    if (telefoneInput) {
-        telefoneInput.addEventListener('input', function (e) {
-            telefoneInput.value = maskTelefone(telefoneInput.value);
-            telefoneInput.setSelectionRange(telefoneInput.value.length, telefoneInput.value.length);
-        });
-    }
+    telefoneInput?.addEventListener('input', function () {
+        telefoneInput.value = maskTelefone(telefoneInput.value);
+        telefoneInput.setSelectionRange(telefoneInput.value.length, telefoneInput.value.length);
+    });
 
-    // Para o modal de edição de telefone
     const editTelefoneInput = document.getElementById('edit_telefone1') || document.getElementById('edit_telefone2');
-    if (editTelefoneInput) {
-        editTelefoneInput.addEventListener('input', function (e) {
-            editTelefoneInput.value = maskTelefone(editTelefoneInput.value);
-            editTelefoneInput.setSelectionRange(editTelefoneInput.value.length, editTelefoneInput.value.length);
-        });
-    }
-
-    // Máscara automática para telefone
-    function maskTelefone(value) {
-        value = value.replace(/\D/g, '');
-        if (value.length <= 11) {
-            // Formato: (XX)XXXXX-XXXX
-            value = value.replace(/(\d{2})(\d)/, '($1)$2');
-            value = value.replace(/(\d{5})(\d)/, '$1-$2');
-        }
-        return value;
-    }
-
+    editTelefoneInput?.addEventListener('input', function () {
+        editTelefoneInput.value = maskTelefone(editTelefoneInput.value);
+        editTelefoneInput.setSelectionRange(editTelefoneInput.value.length, editTelefoneInput.value.length);
+    });
 });
+
+/* ===================== Máscaras / format helpers ===================== */
+function maskCpfCnpj(value) {
+    value = String(value || '').replace(/\D/g, '');
+    if (value.length <= 11) {
+        value = value.replace(/(\d{3})(\d)/, '$1.$2');
+        value = value.replace(/(\d{3})(\d)/, '$1.$2');
+        value = value.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+    } else {
+        value = value.replace(/(\d{2})(\d)/, '$1.$2');
+        value = value.replace(/(\d{3})(\d)/, '$1.$2');
+        value = value.replace(/(\d{3})(\d)/, '$1/$2');
+        value = value.replace(/(\d{4})(\d{1,2})$/, '$1-$2');
+    }
+    return value;
+}
+
+function maskTelefone(value) {
+    value = String(value || '').replace(/\D/g, '');
+    if (value.length <= 11) {
+        value = value.replace(/(\d{2})(\d)/, '($1)$2');
+        value = value.replace(/(\d{5})(\d)/, '$1-$2');
+    }
+    return value;
+}
+
+function capitalizeWords(str) {
+    return String(str || '').replace(/\b\w+/g, (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase());
+}
+function toLower(str) {
+    return String(str || '').toLowerCase();
+}

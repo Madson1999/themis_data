@@ -1,5 +1,5 @@
 /**
- * asyncHandler.js
+ * utils/asyncHandler.js
  * ----------------------------------------
  * Utilitário que encapsula funções async de controllers.
  * - Captura erros de Promises e envia para o middleware de erro
